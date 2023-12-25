@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat&family=Quicksand&family=Raleway:wght@100&family=Roboto:ital,wght@1,100&display=swap');
+a{
+    color: inherit;
+    outline: none;
+}
+*{
+    font-family: 'Montserrat', sans-serif;
+
+}
+body{
+    margin: 0;
+    padding: 0;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: black;
+    width: 96%;
+    height: 70px;
+    border-radius: 35px;
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 10px;
+    text-align: center;
+    border: 3px solid  #222;
+}
+
+.logo {
+    max-width: 200px;
+    height: auto;
+    position: fixed;
+    top: 50%;
+    left: 130px;
+    transform: translate(-50%, -50%);
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.onBar{
+    display: none;
+}
+.onBar i {
+    font-size: 19px ;
+}
+
+.navbarİtems{
+    text-decoration: none;
+    color: white;
+    margin-right: 20px;
+    display: inline-block;
+    position: relative;
+    right: 25px;
+    transition: color 0.3s ease;
+}
+
+.sidebar{
+    position: relative;
+    background-color: black;
+    border-radius: 40px;
+    width: 130px;
+    height: 150px;
+    display: none;
+    top: -45px;
+    right: 2px;
+}
+.sidebarİtems{
+    position: relative;
+    text-decoration: none;
+    color: white;
+    text-align: center;
+    top: 15px;
+    justify-content: center;
+}
+.offBar{
+    display: inline-block;
+    text-decoration: none;
+    position: relative;
+    color: white;
+    font-size: 20px;
+    top: 18px;
+    left: 85px;
+}
+.offBar i {
+    font-size: 19px;
+}
+.navbarİtems:hover{
+    color: rgb(99, 96, 96);
+}
+.footer{
+    position: absolute;
+    background-color: black;
+    color: white;
+    height: 45px; 
+    text-align: center;
+    width: 100%;
+    bottom: 0px;
+}

@@ -1,0 +1,283 @@
+
+@media(min-width: 750px) and (max-width: 800px){
+    .navbar{
+        height: 50px;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 700px) and (max-width: 750px){
+    .navbar{
+        height: 50px;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 650px) and (max-width: 700px){
+    .navbar{
+        height: 50px;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 600px) and (max-width: 650px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+
+@media(min-width: 550px) and (max-width: 600px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 500px) and (max-width: 550px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 450px) and (max-width: 500px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 400px) and (max-width: 450px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width: 350px) and (max-width: 400px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: inline-block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:10px ;
+    }
+}
+@media(min-width:300px ) and (max-width: 350px){
+    .navbar{
+        height: 50px;
+    }
+    .navbarİtems{
+        display: none;
+    }
+    .logo{
+        max-width: 150px;
+        height: auto;
+        left: 90px;
+    }
+    .onBar{
+        display: block;
+        text-decoration: none;
+        position: relative;
+        right: 25px;
+        color: white;
+        font-size: 20px;
+    }
+    .sidebar{
+        float: right;
+    }
+    .footer{
+        height: 30px;
+        font-size:9px ;
+    }
+    
+}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çift Tırnak</title>
+    <link rel="stylesheet" type="text/css" href="../styles/ciftTırnak.css">
+    <link rel="stylesheet" type="text/css"href="../styles/main.css">
+    <link rel="stylesheet" type="text/css" href="../styles/mediaquery.css">
+</head>
+<body>
+        <!--Ana Kısım Başlangıç-->
+        <div class="navbar">
+            <a href="index.html"><img class="logo" src="../img/logo.png"></a>
+            <div class="navbaritems">
+                <a href="index.html" class=" navbarİtems hakkımızda"><h2>Ana Sayfa</h2></a>
+                <a href="ciftTırnak.html" class=" navbarİtems iletişim"><h2>Çift Tırnak</h2></a>
+                <a href="#" class=" symbol onBar" onclick="sidebarOn()"><i class="fa-solid fa-bars"></i></a>
+                <a href="dersKitaplari.html" class="navbarİtems dersKitaplari"><h2>Ders Kitapları</h2></a>
+            </div>
+        </div>
+        <div class="sidebar" id="sidebar">
+            <div class="sidebaritems">
+                <a class=" symbol offBar" onclick="sidebarOff()"><i class="fa-solid fa-bars"></i></a>
+                <a href="index.html" class=" sidebarİtems sideAnasayfa"><h4>Ana Sayfa</h4></a>
+                <a href="ciftTırnak.html" class=" sidebarİtems sideCifttirnak"><h4>Çift Tırnak</h4></a>
+                <a href="dersKitaplari.html" class="sidebarİtems sidedersKitaplari"><h2>Ders Kitapları</h2></a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>© 2024 Omar Codes - Tüm Hakları Saklıdır.   |   Omar Codes </p>
+        </div>
+        <script src="../js/sidebar.js"></script>
+        <!--Ana Kısım Bitiş-->
+    <div class="ciftTırnak">
+        <textarea id="inputTxt" class="inputTxt" placeholder="Metni Giriniz"></textarea>
+        <button onclick="degistir()"class="btnDegistir" id="btnDegistir">Değiştir ve Göster</button>
+        <button class="btnDegistir" onclick="kopyala()">Sonucu Kopyala</button>
+        <textarea id="sonuc" placeholder="Sonuç"></textarea>
+        <script src="../js/ciftTırnak.js"></script>
+    </div>
+</body>
+</html>

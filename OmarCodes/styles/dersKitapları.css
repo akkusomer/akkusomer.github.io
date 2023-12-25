@@ -1,0 +1,12 @@
+.onbirKitap{
+    position: absolute;
+    left: 80px;
+}
+.onbirKitap a {
+    color: blueviolet;
+}
+.onbirKitap hr{
+    width: 130%;
+    position: relative;
+    color: black;
+}
