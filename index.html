@@ -138,26 +138,60 @@
         window.appMap = map;
 
         const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
-        const LABEL_MIN_ZOOM = isMobile ? 19 : 18;
+        const LABEL_MIN_ZOOM = 19;
 
         function shouldShowLabels() {
             return map.getZoom() >= LABEL_MIN_ZOOM;
         }
 
+        let labelSyncRaf = 0;
         function syncLabelVisibility() {
             const show = shouldShowLabels();
             Object.values(markers).forEach((m) => {
+                // Polygon label (L.marker + divIcon)
                 if (m && m.label && m.polygon) {
                     if (show) {
                         if (!map.hasLayer(m.label)) m.label.addTo(map);
                     } else {
                         if (map.hasLayer(m.label)) map.removeLayer(m.label);
                     }
+                    return;
+                }
+
+                // Nokta marker tooltip (bindTooltip)
+                if (m && typeof m.bindTooltip === 'function') {
+                    if (show) {
+                        if (!m.__labelBound) {
+                            m.bindTooltip(m.__labelText || 'İsimsiz', {
+                                permanent: true,
+                                direction: 'top',
+                                offset: [0, -14]
+                            });
+                            m.__labelBound = true;
+                            try { m.openTooltip(); } catch (e) {}
+                        }
+                    } else {
+                        if (m.__labelBound) {
+                            try { m.unbindTooltip(); } catch (e) {}
+                            m.__labelBound = false;
+                        }
+                    }
                 }
             });
         }
 
-        map.on('zoomend', syncLabelVisibility);
+        function scheduleSyncLabelVisibility() {
+            if (labelSyncRaf) return;
+            labelSyncRaf = requestAnimationFrame(() => {
+                labelSyncRaf = 0;
+                syncLabelVisibility();
+            });
+        }
+
+        map.on('zoom', scheduleSyncLabelVisibility);
+        map.on('zoomend', scheduleSyncLabelVisibility);
+        map.on('move', scheduleSyncLabelVisibility);
+        map.on('moveend', scheduleSyncLabelVisibility);
         
         // Özel marker ikonları oluştur
         const createMarkerIcon = (color) => {
@@ -426,13 +460,11 @@
                     const icon = shop.program === 'atlas' ? greenIcon : redIcon;
                     
                     const marker = L.marker(shop.coords, { icon: icon })
-                        .bindTooltip(shop.name || 'İsimsiz', {
-                            permanent: true,
-                            direction: 'top',
-                            offset: [0, -14]
-                        })
                         .bindPopup(renderShopPopupHtml(shop))
                         .addTo(map);
+
+                    marker.__labelText = shop.name || 'İsimsiz';
+                    marker.__labelBound = false;
 
                     marker.on('click', () => {
                         openMobileDetail(shop);
@@ -448,7 +480,7 @@
             updateShopList(shopsArray);
             updateStats(shopsArray);
 
-            syncLabelVisibility();
+            scheduleSyncLabelVisibility();
         });
         
         // Sidebar işlevleri
@@ -905,7 +937,10 @@
         
         /* Sınır Çizgisi Stilleri */
         .boundary-polygon {
-            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+            filter:
+                drop-shadow(0 0 2px rgba(255, 59, 59, 0.95))
+                drop-shadow(0 0 10px rgba(255, 59, 59, 0.8))
+                drop-shadow(0 0 22px rgba(255, 0, 64, 0.55));
         }
 
         .sidebar-overlay {

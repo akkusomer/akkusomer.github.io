@@ -53,6 +53,8 @@
             const logoutBtn = document.getElementById('logoutBtn');
             const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
 
+            const getMapSafe = () => window.adminMap;
+
             const mapTabBtn = document.getElementById('adminTabMapBtn');
             const listTabBtn = document.getElementById('adminTabListBtn');
             const actionBlockBtn = document.getElementById('adminActionBlockBtn');
@@ -74,17 +76,14 @@
                     if (listTabBtn) listTabBtn.classList.remove('active');
                 }
 
-                if (tableContainer) {
-                    tableContainer.style.display = tab === 'list' ? 'block' : 'none';
-                }
-
-                const mapEl = document.getElementById('map');
-                if (mapEl) {
-                    mapEl.style.display = tab === 'list' ? 'none' : 'block';
-                }
-
                 setTimeout(() => {
-                    try { map.invalidateSize(); } catch (e) {}
+                    const m = getMapSafe();
+                    if (m && typeof m.invalidateSize === 'function') {
+                        try { m.invalidateSize(); } catch (e) {}
+                    }
+                    if (typeof window.scheduleSyncLabelVisibility === 'function') {
+                        try { window.scheduleSyncLabelVisibility(); } catch (e) {}
+                    }
                 }, 60);
             };
 
@@ -97,6 +96,16 @@
             function showAdmin() {
                 if (loginScreen) loginScreen.style.display = 'none';
                 if (adminApp) adminApp.style.display = 'block';
+
+                setTimeout(() => {
+                    const m = getMapSafe();
+                    if (m && typeof m.invalidateSize === 'function') {
+                        try { m.invalidateSize(); } catch (e) {}
+                    }
+                    if (typeof window.scheduleSyncLabelVisibility === 'function') {
+                        try { window.scheduleSyncLabelVisibility(); } catch (e) {}
+                    }
+                }, 80);
             }
 
             onAuthStateChanged(auth, (user) => {
@@ -174,9 +183,6 @@
             const syncMobileAdminUi = () => {
                 if (!isMobileNow()) {
                     document.body.classList.remove('admin-tab-map', 'admin-tab-list');
-                    if (tableContainer) tableContainer.style.display = 'block';
-                    const mapEl = document.getElementById('map');
-                    if (mapEl) mapEl.style.display = 'block';
                     return;
                 }
                 if (!document.body.classList.contains('admin-tab-map') && !document.body.classList.contains('admin-tab-list')) {
@@ -228,13 +234,19 @@
             ],
             maxBoundsViscosity: 1.0
         });
-        
+
+        window.adminMap = map;
+
         // Esri World Imagery (Uydu Görüntüsü) katmanını ekle
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
             maxZoom: 22,
             maxNativeZoom: 19
         }).addTo(map);
+
+        // Marker'ları ve polygon+label referanslarını sakla
+        let markers = {};
+        let shopPolygons = {};
         
         // Sınır polygon'unu oluştur (sadece görsel amaçlı - kırmızı çerçeve)
         const boundaryPolygon = L.polygon(coordinates, {
@@ -254,6 +266,40 @@
         map.fitBounds(polygonBounds, {
             padding: [20, 20]
         });
+
+        const LABEL_MIN_ZOOM = 19;
+
+        function shouldShowLabels() {
+            return map.getZoom() >= LABEL_MIN_ZOOM;
+        }
+
+        let labelSyncRaf = 0;
+        function syncLabelVisibility() {
+            const show = shouldShowLabels();
+            Object.values(shopPolygons).forEach((obj) => {
+                if (!obj || !obj.label) return;
+                if (show) {
+                    if (!map.hasLayer(obj.label)) obj.label.addTo(map);
+                } else {
+                    if (map.hasLayer(obj.label)) map.removeLayer(obj.label);
+                }
+            });
+        }
+
+        function scheduleSyncLabelVisibility() {
+            if (labelSyncRaf) return;
+            labelSyncRaf = requestAnimationFrame(() => {
+                labelSyncRaf = 0;
+                syncLabelVisibility();
+            });
+        }
+
+        window.scheduleSyncLabelVisibility = scheduleSyncLabelVisibility;
+
+        map.on('zoom', scheduleSyncLabelVisibility);
+        map.on('zoomend', scheduleSyncLabelVisibility);
+        map.on('move', scheduleSyncLabelVisibility);
+        map.on('moveend', scheduleSyncLabelVisibility);
         
         // Point-in-Polygon kontrol fonksiyonu (Ray Casting Algoritması)
         function pointInPolygon(lat, lng, polygonCoords) {
@@ -355,13 +401,7 @@
                 : (noNum !== null ? `Dükkan ${noNum}` : 'İsimsiz');
             return { ...shop, noNum, no: noStr, name };
         }
-        
-        // Marker'ları saklamak için obje
-        let markers = {};
-        
-        // Polygon'ları saklamak için obje
-        let shopPolygons = {};
-        
+
         // Dükkan verilerini saklamak için obje (düzenleme için)
         let shopsData = {};
         
@@ -471,11 +511,10 @@
             return shops;
         }
         
-        // Harita tıklama olayı
+        // Form ve modal elemanları
         let clickedCoords = null;
         let addShopMode = false;
         let isEditMode = false;
-        let editModeEnabled = false;
         let editingShopId = null;
         const formModal = document.getElementById('formModal');
         const shopForm = document.getElementById('shopForm');
@@ -674,24 +713,6 @@
             document.getElementById('submitBtn').textContent = originalSubmitText;
         });
 
-        // Düzenleme modu butonu
-        const toggleEditModeBtn = document.getElementById('toggleEditModeBtn');
-        if (toggleEditModeBtn) {
-            const syncEditBtn = () => {
-                toggleEditModeBtn.textContent = editModeEnabled ? 'Düzenleme Modu: Açık' : 'Düzenleme Modu: Kapalı';
-                toggleEditModeBtn.classList.toggle('btn-success', editModeEnabled);
-                toggleEditModeBtn.classList.toggle('btn-danger', !editModeEnabled);
-            };
-
-            toggleEditModeBtn.addEventListener('click', () => {
-                editModeEnabled = !editModeEnabled;
-                syncEditBtn();
-                showToast(editModeEnabled ? 'Düzenleme modu açıldı. Polygonlara tıklayarak düzenleyebilirsiniz.' : 'Düzenleme modu kapatıldı.', 'success');
-            });
-
-            syncEditBtn();
-        }
-
         // Dükkan Ekle butonu (tek tıkla konum seç, sonra form aç)
         const addShopBtn = document.getElementById('addShopBtn');
         if (addShopBtn) {
@@ -771,13 +792,13 @@
                             iconSize: [60, 30],
                             iconAnchor: [30, 15]
                         })
-                    }).addTo(map);
+                    });
+
+                    if (shouldShowLabels()) {
+                        label.addTo(map);
+                    }
                     
                     polygon.on('click', () => {
-                        if (!editModeEnabled) {
-                            showToast('Düzenlemek için önce "Düzenleme Modu"nu açın.', 'error');
-                            return;
-                        }
                         document.getElementById('detailShopName').value = shop.name || '';
                         document.getElementById('detailShopNo').value = shop.no || '';
                         document.getElementById('detailShopProgram').value = shop.program || 'diger';
@@ -822,6 +843,8 @@
                 markers[shop.id] = marker;
             });
 
+            scheduleSyncLabelVisibility();
+
             // Tabloyu güncelle
             shopsArray.forEach(shop => {
                 shopsData[shop.id] = shop;
@@ -835,7 +858,7 @@
             tbody.innerHTML = '';
             
             if (shops.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Henüz dükkan eklenmemiş</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">Henüz dükkan eklenmemiş</td></tr>';
                 return;
             }
             
@@ -860,11 +883,8 @@
                             ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-gray-300 text-sm">
-                        ${shop.coords ? `${shop.coords[0].toFixed(6)}, ${shop.coords[1].toFixed(6)}` : '-'}
-                    </td>
                     <td class="px-6 py-4">
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 justify-end">
                             <button 
                                 onclick="editShop('${shop.id}')" 
                                 class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition"
@@ -904,6 +924,7 @@
         const toggleAreaDivisionBtn = document.getElementById('toggleAreaDivisionBtn');
         const startDivisionBtn = document.getElementById('startDivisionBtn');
         const clearDivisionBtn = document.getElementById('clearDivisionBtn');
+        const cancelDivisionBtn = document.getElementById('cancelDivisionBtn');
         const divideAreaBtn = document.getElementById('divideAreaBtn');
         const selectedPointsDisplay = document.getElementById('selectedPointsDisplay');
         const divisionStatus = document.getElementById('divisionStatus');
@@ -957,6 +978,40 @@
             divisionStatus.textContent = '';
             divideAreaBtn.disabled = true;
         });
+
+        if (cancelDivisionBtn) {
+            cancelDivisionBtn.addEventListener('click', () => {
+                areaDivisionMode = false;
+                selectedPoints = [];
+
+                map.eachLayer((layer) => {
+                    if (layer instanceof L.Marker && layer.options.icon?.options?.className === 'point-marker') {
+                        map.removeLayer(layer);
+                    }
+                    if (layer instanceof L.Polygon && layer.options.fillColor === '#3b82f6') {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                selectedPointsDisplay.textContent = '0/4';
+                divisionStatus.textContent = '';
+                divideAreaBtn.disabled = true;
+
+                if (startNoInput) startNoInput.value = '';
+                if (endNoInput) endNoInput.value = '';
+                if (calculatedShopCount) calculatedShopCount.textContent = '';
+
+                const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+                if (isMobile) {
+                    areaDivisionPanel.classList.remove('open');
+                    setTimeout(() => {
+                        areaDivisionPanel.style.display = 'none';
+                    }, 260);
+                } else {
+                    areaDivisionPanel.style.display = 'none';
+                }
+            });
+        }
         
         // Başlangıç ve bitiş numarası değişikliğinde hesaplama
         const startNoInput = document.getElementById('startNoInput');
@@ -1082,14 +1137,14 @@
                         iconSize: [60, 30],
                         iconAnchor: [30, 15]
                     })
-                }).addTo(map);
+                });
+
+                if (shouldShowLabels()) {
+                    label.addTo(map);
+                }
                 
                 // Tıklama olayı
                 shopPolygon.on('click', () => {
-                    if (!editModeEnabled) {
-                        showToast('Düzenlemek için önce "Düzenleme Modu"nu açın.', 'error');
-                        return;
-                    }
                     const existingShop = divisionShopData[shopNo];
                     document.getElementById('detailShopName').value = existingShop?.name || `Dükkan ${shopNo}`;
                     document.getElementById('detailShopNo').value = existingShop?.no || shopNo.toString();
@@ -1112,6 +1167,8 @@
                     name: `Dükkan ${shopNo}`,
                     no: shopNo,
                     program: 'diger',
+                    telefon: '',
+                    vergiNo: '',
                     coords: shop.center,
                     polygonCoords: polygonCoordsToObjects(shop.coords),
                     blockId: blockId
@@ -1493,6 +1550,11 @@
             font-size: 14px;
             cursor: pointer;
         }
+
+        .form-select option {
+            background: #ffffff;
+            color: #0f172a;
+        }
         
         .form-select:focus {
             outline: none;
@@ -1613,7 +1675,10 @@
         
         /* Sınır Çizgisi Stilleri */
         .boundary-polygon {
-            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+            filter:
+                drop-shadow(0 0 2px rgba(255, 59, 59, 0.95))
+                drop-shadow(0 0 10px rgba(255, 59, 59, 0.8))
+                drop-shadow(0 0 22px rgba(255, 0, 64, 0.55));
         }
         
         /* Blok Listesi Panel */
@@ -1681,11 +1746,11 @@
             }
 
             .admin-app-header {
-                display: flex;
+                display: flex !important;
             }
 
             .admin-bottom-nav {
-                display: flex;
+                display: flex !important;
             }
 
             .area-division-panel {
@@ -1737,11 +1802,19 @@
             }
 
             body.admin-tab-list #map {
-                display: none;
+                display: none !important;
             }
 
             body.admin-tab-map .table-container {
-                display: none;
+                display: none !important;
+            }
+
+            body.admin-tab-list .table-container {
+                display: block !important;
+            }
+
+            body.admin-tab-map #map {
+                display: block !important;
             }
         }
 
@@ -1832,17 +1905,17 @@
         }
         
         .shop-polygon.atlas {
-            fillColor: #10b981;
+            fill: #10b981;
             color: #10b981;
         }
         
         .shop-polygon.diger {
-            fillColor: #ef4444;
+            fill: #ef4444;
             color: #ef4444;
         }
         
         .shop-polygon.empty {
-            fillColor: #6b7280;
+            fill: #6b7280;
             color: #6b7280;
         }
 
@@ -1919,7 +1992,6 @@
         <div class="flex items-center gap-4">
             <button id="toggleAreaDivisionBtn" class="btn btn-success">Blok Oluştur</button>
             <button id="addShopBtn" class="btn btn-primary">Dükkan Ekle</button>
-            <button id="toggleEditModeBtn" class="btn btn-danger">Düzenleme Modu: Kapalı</button>
             <button id="logoutBtn" class="btn btn-danger">Çıkış Yap</button>
             <a href="index.html" class="nav-link">Kullanıcı Paneli</a>
             <a href="admin.html" class="nav-link active">Yönetim Paneli</a>
@@ -2014,6 +2086,8 @@
             <button id="startDivisionBtn" class="btn btn-primary flex-1">Blok Seçimini Başlat</button>
             <button id="clearDivisionBtn" class="btn btn-danger flex-1">Temizle</button>
         </div>
+
+        <button id="cancelDivisionBtn" class="btn btn-danger w-full mb-4">İptal</button>
         
         <button id="divideAreaBtn" class="btn btn-success w-full mb-4" disabled>Oluştur ve Kaydet</button>
         
@@ -2124,7 +2198,6 @@
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan Adı</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan No</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Program</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Koordinatlar</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">İşlem</th>
                         </tr>
                     </thead>
