@@ -1,0 +1,2141 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>Antalya Hal Takip Sistemi - Yönetim Paneli</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, getDocs, query, where, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        
+        // Firebase yapılandırması
+        const firebaseConfig = {
+            apiKey: "AIzaSyC6IArgdfUJPI0VEZRQkrlRUe_WmSkloI0",
+            authDomain: "antalyahal-43d9a.firebaseapp.com",
+            projectId: "antalyahal-43d9a",
+            storageBucket: "antalyahal-43d9a.firebasestorage.app",
+            messagingSenderId: "918495458124",
+            appId: "1:918495458124:web:db98fce6b74840a9be15e9"
+        };
+        
+        // Firebase'i başlat
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const adminApp = document.getElementById('adminApp');
+            const loginScreen = document.getElementById('loginScreen');
+            const loginForm = document.getElementById('loginForm');
+            const loginEmail = document.getElementById('loginEmail');
+            const loginPassword = document.getElementById('loginPassword');
+            const loginError = document.getElementById('loginError');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+
+            const mapTabBtn = document.getElementById('adminTabMapBtn');
+            const listTabBtn = document.getElementById('adminTabListBtn');
+            const actionBlockBtn = document.getElementById('adminActionBlockBtn');
+            const actionAddBtn = document.getElementById('adminActionAddBtn');
+            const tableContainer = document.querySelector('.table-container');
+
+            const isMobileNow = () => window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+
+            window.setAdminTab = (tab) => {
+                if (!isMobileNow()) return;
+                document.body.classList.remove('admin-tab-map', 'admin-tab-list');
+                if (tab === 'list') {
+                    document.body.classList.add('admin-tab-list');
+                    if (mapTabBtn) mapTabBtn.classList.remove('active');
+                    if (listTabBtn) listTabBtn.classList.add('active');
+                } else {
+                    document.body.classList.add('admin-tab-map');
+                    if (mapTabBtn) mapTabBtn.classList.add('active');
+                    if (listTabBtn) listTabBtn.classList.remove('active');
+                }
+
+                if (tableContainer) {
+                    tableContainer.style.display = tab === 'list' ? 'block' : 'none';
+                }
+
+                const mapEl = document.getElementById('map');
+                if (mapEl) {
+                    mapEl.style.display = tab === 'list' ? 'none' : 'block';
+                }
+
+                setTimeout(() => {
+                    try { map.invalidateSize(); } catch (e) {}
+                }, 60);
+            };
+
+            function showLogin(message = '') {
+                if (adminApp) adminApp.style.display = 'none';
+                if (loginScreen) loginScreen.style.display = 'flex';
+                if (loginError) loginError.textContent = message;
+            }
+
+            function showAdmin() {
+                if (loginScreen) loginScreen.style.display = 'none';
+                if (adminApp) adminApp.style.display = 'block';
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                window.isAdminAuthed = !!user;
+                if (user) {
+                    showAdmin();
+                    if (isMobileNow()) {
+                        window.setAdminTab('map');
+                    }
+                } else {
+                    showLogin('');
+                }
+            });
+
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = (loginEmail?.value || '').trim();
+                    const password = (loginPassword?.value || '').trim();
+                    if (!email || !password) {
+                        showLogin('E-posta ve şifre zorunludur.');
+                        return;
+                    }
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                        if (loginError) loginError.textContent = '';
+                    } catch (err) {
+                        console.error('Login error', err);
+                        showLogin('Giriş başarısız. E-posta/şifre kontrol edin.');
+                    }
+                });
+            }
+
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async () => {
+                    try {
+                        await signOut(auth);
+                    } finally {
+                        window.location.href = 'index.html';
+                    }
+                });
+            }
+
+            if (mobileLogoutBtn) {
+                mobileLogoutBtn.addEventListener('click', async () => {
+                    if (logoutBtn) {
+                        logoutBtn.click();
+                        return;
+                    }
+                    try {
+                        await signOut(auth);
+                    } finally {
+                        window.location.href = 'index.html';
+                    }
+                });
+            }
+
+            if (mapTabBtn) mapTabBtn.addEventListener('click', () => window.setAdminTab('map'));
+            if (listTabBtn) listTabBtn.addEventListener('click', () => window.setAdminTab('list'));
+
+            if (actionBlockBtn) {
+                actionBlockBtn.addEventListener('click', () => {
+                    const btn = document.getElementById('toggleAreaDivisionBtn');
+                    if (btn) btn.click();
+                });
+            }
+
+            if (actionAddBtn) {
+                actionAddBtn.addEventListener('click', () => {
+                    const btn = document.getElementById('addShopBtn');
+                    if (btn) btn.click();
+                });
+            }
+
+            const syncMobileAdminUi = () => {
+                if (!isMobileNow()) {
+                    document.body.classList.remove('admin-tab-map', 'admin-tab-list');
+                    if (tableContainer) tableContainer.style.display = 'block';
+                    const mapEl = document.getElementById('map');
+                    if (mapEl) mapEl.style.display = 'block';
+                    return;
+                }
+                if (!document.body.classList.contains('admin-tab-map') && !document.body.classList.contains('admin-tab-list')) {
+                    document.body.classList.add('admin-tab-map');
+                }
+            };
+
+            window.addEventListener('resize', syncMobileAdminUi);
+            syncMobileAdminUi();
+        });
+        
+        // Koordinatlar (Harita sınırları)
+        const coordinates = [
+            [36.925717, 30.743771],
+            [36.925020, 30.738135],
+            [36.922557, 30.738725],
+            [36.921024, 30.739153],
+            [36.920119, 30.739401],
+            [36.918652, 30.740409],
+            [36.918163, 30.740827],
+            [36.918060, 30.741257],
+            [36.919150, 30.743628],
+            [36.921672, 30.746337]
+        ];
+        
+        // maxBounds için en kuzey, güney, doğu ve batı noktalarını hesapla
+        const lats = coordinates.map(coord => coord[0]);
+        const lngs = coordinates.map(coord => coord[1]);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        
+        // Harita merkezini hesapla
+        const centerLat = (minLat + maxLat) / 2;
+        const centerLng = (minLng + maxLng) / 2;
+        
+        // Haritayı oluştur
+        const map = L.map('map', {
+            center: [centerLat, centerLng],
+            zoom: 18,
+            minZoom: 17,
+            maxZoom: 22,
+            preferCanvas: true,
+            renderer: L.canvas({ padding: 0.5 }),
+            maxBounds: [
+                [minLat, minLng],
+                [maxLat, maxLng]
+            ],
+            maxBoundsViscosity: 1.0
+        });
+        
+        // Esri World Imagery (Uydu Görüntüsü) katmanını ekle
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+            maxZoom: 22,
+            maxNativeZoom: 19
+        }).addTo(map);
+        
+        // Sınır polygon'unu oluştur (sadece görsel amaçlı - kırmızı çerçeve)
+        const boundaryPolygon = L.polygon(coordinates, {
+            color: '#ef4444',
+            fillColor: 'transparent',
+            fillOpacity: 0,
+            weight: 4,
+            opacity: 1,
+            className: 'boundary-polygon',
+            interactive: false
+        }).addTo(map);
+
+        boundaryPolygon.bringToFront();
+        
+        // Haritayı belirtilen alana otomatik hizala
+        const polygonBounds = L.polygon(coordinates).getBounds();
+        map.fitBounds(polygonBounds, {
+            padding: [20, 20]
+        });
+        
+        // Point-in-Polygon kontrol fonksiyonu (Ray Casting Algoritması)
+        function pointInPolygon(lat, lng, polygonCoords) {
+            // Önce bounds kontrolü (hızlı filtreleme)
+            const bounds = L.latLngBounds(polygonCoords);
+            const point = L.latLng(lat, lng);
+            
+            if (!bounds.contains(point)) {
+                return false;
+            }
+            
+            // Ray casting algoritması (kesin kontrol)
+            let inside = false;
+            
+            for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+                const xi = polygonCoords[i][1], yi = polygonCoords[i][0]; // lng, lat
+                const xj = polygonCoords[j][1], yj = polygonCoords[j][0]; // lng, lat
+                
+                const intersect = ((yi > lng) !== (yj > lng))
+                    && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            
+            return inside;
+        }
+        
+        // Toast mesajı fonksiyonu
+        function showToast(message, type = 'error') {
+            // Mevcut toast'ı kaldır
+            const existingToast = document.getElementById('toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
+            
+            const toast = document.createElement('div');
+            toast.id = 'toast';
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Animasyon için
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            // 3 saniye sonra kaldır
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js');
+            });
+        }
+
+        function normalizePolygonCoords(raw) {
+            if (!raw || !Array.isArray(raw)) return [];
+            return raw
+                .map((p) => {
+                    if (Array.isArray(p) && p.length === 2) return [p[0], p[1]];
+                    if (p && typeof p === 'object' && typeof p.lat === 'number' && typeof p.lng === 'number') return [p.lat, p.lng];
+                    return null;
+                })
+                .filter(Boolean);
+        }
+
+        function polygonCoordsToObjects(coords) {
+            if (!coords || !Array.isArray(coords)) return [];
+            return coords
+                .map((p) => {
+                    if (Array.isArray(p) && p.length === 2) return { lat: p[0], lng: p[1] };
+                    if (p && typeof p === 'object' && typeof p.lat === 'number' && typeof p.lng === 'number') return { lat: p.lat, lng: p.lng };
+                    return null;
+                })
+                .filter(Boolean);
+        }
+
+        function normalizeShopNo(value, fallbackName = '') {
+            const direct = parseInt(String(value ?? '').trim(), 10);
+            if (Number.isFinite(direct)) return direct;
+            const m = String(fallbackName ?? '').match(/(\d+)/);
+            if (m) {
+                const n = parseInt(m[1], 10);
+                if (Number.isFinite(n)) return n;
+            }
+            return null;
+        }
+
+        function normalizeShopDisplay(shop) {
+            const noNum = normalizeShopNo(shop.no, shop.name);
+            const noStr = noNum !== null ? String(noNum) : (shop.no ? String(shop.no) : '');
+            const name = (shop.name && String(shop.name).trim())
+                ? String(shop.name).trim()
+                : (noNum !== null ? `Dükkan ${noNum}` : 'İsimsiz');
+            return { ...shop, noNum, no: noStr, name };
+        }
+        
+        // Marker'ları saklamak için obje
+        let markers = {};
+        
+        // Polygon'ları saklamak için obje
+        let shopPolygons = {};
+        
+        // Dükkan verilerini saklamak için obje (düzenleme için)
+        let shopsData = {};
+        
+        // Özel marker ikonları oluştur
+        const createMarkerIcon = (color) => {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="
+                    width: 28px;
+                    height: 28px;
+                    background-color: ${color};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                "></div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+        };
+        
+        const greenIcon = createMarkerIcon('#10b981'); // Atlas - Yeşil
+        const redIcon = createMarkerIcon('#ef4444');   // Diğer - Kırmızı
+        
+        // Alan Bölme Özellikleri
+        let areaDivisionMode = false;
+        let selectedPoints = [];
+        let divisionPolygons = [];
+        let divisionShopData = {};
+        
+        // Poligonu eşit parçalara bölme fonksiyonu (Yatay veya Dikey)
+        // Not: Bu fonksiyon 4 noktalı (yaklaşık dikdörtgensi) poligonlarda çalışır.
+        // Bölme işlemi bounding-box ile değil, kenarlar üzerinde lineer interpolasyon ile yapılır.
+        function dividePolygonIntoShops(polygonCoords, shopCount, direction) {
+            if (polygonCoords.length !== 4) {
+                showToast('Lütfen 4 nokta seçin!', 'error');
+                return [];
+            }
+
+            const lerpPoint = (pA, pB, t) => {
+                return [
+                    pA[0] + (pB[0] - pA[0]) * t,
+                    pA[1] + (pB[1] - pA[1]) * t
+                ];
+            };
+
+            const avgPoint = (pts) => {
+                const s = pts.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0]);
+                return [s[0] / pts.length, s[1] / pts.length];
+            };
+
+            // 4 noktayı saat yönünde sırala
+            const centroid = avgPoint(polygonCoords);
+            const ordered = [...polygonCoords].sort((a, b) => {
+                const angA = Math.atan2(a[0] - centroid[0], a[1] - centroid[1]);
+                const angB = Math.atan2(b[0] - centroid[0], b[1] - centroid[1]);
+                return angA - angB;
+            });
+
+            // Üst ve alt kenarları belirle (en büyük enlem = üst)
+            const sortedByLat = [...ordered].sort((a, b) => b[0] - a[0]);
+            const top2 = sortedByLat.slice(0, 2).sort((a, b) => a[1] - b[1]); // sol->sağ
+            const bottom2 = sortedByLat.slice(2, 4).sort((a, b) => a[1] - b[1]); // sol->sağ
+
+            const P1 = top2[0];       // üst-sol
+            const P2 = top2[1];       // üst-sağ
+            const P4 = bottom2[0];    // alt-sol
+            const P3 = bottom2[1];    // alt-sağ
+
+            const shops = [];
+
+            if (direction === 'yatay') {
+                // Üst kenar (P1-P2) ve alt kenar (P4-P3) arasında dilimle
+                for (let i = 0; i < shopCount; i++) {
+                    const t0 = i / shopCount;
+                    const t1 = (i + 1) / shopCount;
+
+                    const A0 = lerpPoint(P1, P2, t0);
+                    const A1 = lerpPoint(P1, P2, t1);
+                    const B0 = lerpPoint(P4, P3, t0);
+                    const B1 = lerpPoint(P4, P3, t1);
+
+                    const shopCoords = [A0, A1, B1, B0];
+                    shops.push({
+                        coords: shopCoords,
+                        center: avgPoint(shopCoords)
+                    });
+                }
+            } else {
+                // Sol kenar (P1-P4) ve sağ kenar (P2-P3) arasında dilimle
+                for (let i = 0; i < shopCount; i++) {
+                    const t0 = i / shopCount;
+                    const t1 = (i + 1) / shopCount;
+
+                    const L0 = lerpPoint(P1, P4, t0);
+                    const L1 = lerpPoint(P1, P4, t1);
+                    const R0 = lerpPoint(P2, P3, t0);
+                    const R1 = lerpPoint(P2, P3, t1);
+
+                    const shopCoords = [L0, R0, R1, L1];
+                    shops.push({
+                        coords: shopCoords,
+                        center: avgPoint(shopCoords)
+                    });
+                }
+            }
+
+            return shops;
+        }
+        
+        // Harita tıklama olayı
+        let clickedCoords = null;
+        let addShopMode = false;
+        let isEditMode = false;
+        let editModeEnabled = false;
+        let editingShopId = null;
+        const formModal = document.getElementById('formModal');
+        const shopForm = document.getElementById('shopForm');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const formTitle = document.getElementById('formTitle');
+        
+        map.on('click', (e) => {
+            // Alan bölme modu kontrolü
+            if (areaDivisionMode) {
+                const clickedLat = e.latlng.lat;
+                const clickedLng = e.latlng.lng;
+                
+                selectedPoints.push([clickedLat, clickedLng]);
+                selectedPointsDisplay.textContent = `${selectedPoints.length}/4`;
+                
+                const isMobileTouch = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+                const pointSize = isMobileTouch ? 28 : 20;
+                const pointBorder = isMobileTouch ? 3 : 2;
+                const pointAnchor = isMobileTouch ? 14 : 10;
+
+                // Marker ekle
+                L.marker([clickedLat, clickedLng], {
+                    icon: L.divIcon({
+                        className: 'point-marker',
+                        html: `<div style="
+                            width: ${pointSize}px;
+                            height: ${pointSize}px;
+                            background-color: #3b82f6;
+                            border: ${pointBorder}px solid white;
+                            border-radius: 50%;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        "></div>`,
+                        iconSize: [pointSize, pointSize],
+                        iconAnchor: [pointAnchor, pointAnchor]
+                    })
+                }).addTo(map).bindPopup(`Nokta ${selectedPoints.length}/4`);
+                
+                if (selectedPoints.length === 4) {
+                    // Önceki seçim polygon'unu kaldır
+                    map.eachLayer((layer) => {
+                        if (layer instanceof L.Polygon && layer.options.fillColor === '#3b82f6') {
+                            map.removeLayer(layer);
+                        }
+                    });
+                    
+                    // 4 nokta seçildi, poligon çiz
+                    const polygon = L.polygon(selectedPoints, {
+                        color: '#3b82f6',
+                        fillColor: '#3b82f6',
+                        fillOpacity: 0.2,
+                        weight: 2
+                    }).addTo(map);
+                    
+                    document.getElementById('divideAreaBtn').disabled = false;
+                    divisionStatus.textContent = '4 nokta seçildi! Dükkan sayısını girin ve bölme yönünü seçin.';
+                    showToast('4 nokta seçildi! Dükkan sayısını girin ve bölme yönünü seçin.', 'success');
+                }
+                return;
+            }
+
+            if (isEditMode) return; // Düzenleme modundayken haritaya tıklama devre dışı
+
+            // Serbest tıklama ile otomatik ekleme KAPALI.
+            // Sadece 'Dükkan Ekle' butonu ile açılan tek-tık modunda form açılır.
+            if (!addShopMode) return;
+
+            const clickedLat = e.latlng.lat;
+            const clickedLng = e.latlng.lng;
+            clickedCoords = [clickedLat, clickedLng];
+
+            addShopMode = false;
+            formTitle.textContent = 'Yeni Dükkan Ekle';
+            isEditMode = false;
+            editingShopId = null;
+            formModal.style.display = 'block';
+            shopForm.reset();
+        });
+        
+        // Form gönderme
+        shopForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const shopData = {
+                name: document.getElementById('shopName').value.trim(),
+                no: document.getElementById('shopNo').value.trim(),
+                program: document.getElementById('shopProgram').value,
+                vergiNo: document.getElementById('shopVergiNo')?.value.trim() || '',
+                telefon: document.getElementById('shopTelefon')?.value.trim() || ''
+            };
+            
+            if (!shopData.name || !shopData.no || !shopData.program) {
+                showToast('Lütfen tüm alanları doldurun!', 'error');
+                return;
+            }
+            
+            try {
+                if (isEditMode && editingShopId) {
+                    // Güncelleme modu - koordinatları koru
+                    const existingShop = shopsData[editingShopId];
+                    if (existingShop && existingShop.coords) {
+                        shopData.coords = existingShop.coords;
+                    }
+                    if (existingShop && existingShop.polygonCoords) {
+                        shopData.polygonCoords = existingShop.polygonCoords;
+                    }
+                    await updateDoc(doc(db, 'dukkanlar', editingShopId), shopData);
+                    showToast('Dükkan başarıyla güncellendi!', 'success');
+                } else {
+                    // Yeni ekleme modu
+                    if (!clickedCoords) return;
+                    
+                    shopData.coords = clickedCoords;
+                    await addDoc(collection(db, 'dukkanlar'), shopData);
+                    showToast('Dükkan başarıyla eklendi!', 'success');
+                }
+                
+                formModal.style.display = 'none';
+                clickedCoords = null;
+                isEditMode = false;
+                editingShopId = null;
+                formTitle.textContent = originalFormTitle;
+                document.getElementById('formSubtitle').textContent = 'Haritaya tıklayarak dükkan konumunu seçin';
+                document.getElementById('submitBtn').textContent = originalSubmitText;
+            } catch (error) {
+                console.error('Hata:', error);
+                showToast(isEditMode ? 'Dükkan güncellenirken bir hata oluştu!' : 'Dükkan eklenirken bir hata oluştu!', 'error');
+            }
+        });
+        
+        // İptal butonu
+        cancelBtn.addEventListener('click', () => {
+            formModal.style.display = 'none';
+            clickedCoords = null;
+            isEditMode = false;
+            editingShopId = null;
+            addShopMode = false;
+        });
+        
+        // Düzenleme fonksiyonu (global scope'a ekle)
+        window.editShop = function(shopId) {
+            const shopData = shopsData[shopId];
+            if (!shopData) {
+                showToast('Dükkan verisi bulunamadı!', 'error');
+                return;
+            }
+            
+            // Polygon dükkanlarda poligona tıklama ile düzenleme kullanılıyor
+            if (shopData.polygonCoords && Array.isArray(shopData.polygonCoords)) {
+                const obj = shopPolygons[shopId];
+                if (obj?.polygon) {
+                    obj.polygon.fire('click');
+                    return;
+                }
+            }
+            
+            isEditMode = true;
+            editingShopId = shopId;
+            formTitle.textContent = 'Dükkan Düzenle';
+            document.getElementById('formSubtitle').textContent = 'Dükkan bilgilerini güncelleyin';
+            document.getElementById('submitBtn').textContent = 'Güncelle';
+            
+            // Form alanlarını doldur
+            document.getElementById('shopName').value = shopData.name || '';
+            document.getElementById('shopNo').value = shopData.no || '';
+            document.getElementById('shopProgram').value = shopData.program || '';
+            const vergiNoInput = document.getElementById('shopVergiNo');
+            const telefonInput = document.getElementById('shopTelefon');
+            if (vergiNoInput) vergiNoInput.value = shopData.vergiNo || '';
+            if (telefonInput) telefonInput.value = shopData.telefon || '';
+            
+            formModal.style.display = 'block';
+            
+            // Haritayı dükkana odakla
+            if (shopData.coords && Array.isArray(shopData.coords)) {
+                const viewCoords = shopData.coords.length === 2 ? shopData.coords : shopData.coords[0];
+                map.setView(viewCoords, 19, {
+                    animate: true,
+                    duration: 0.5
+                });
+                
+                // Marker'ı aç
+                if (markers[shopId]) {
+                    markers[shopId].openPopup();
+                }
+            }
+        };
+        
+        // Form modal açıldığında başlık ve buton metinlerini sıfırla
+        const originalFormTitle = formTitle.textContent;
+        const originalSubmitText = document.getElementById('submitBtn').textContent;
+        
+        // İptal butonuna tıklandığında formu sıfırla
+        cancelBtn.addEventListener('click', () => {
+            formTitle.textContent = originalFormTitle;
+            document.getElementById('formSubtitle').textContent = 'Haritaya tıklayarak dükkan konumunu seçin';
+            document.getElementById('submitBtn').textContent = originalSubmitText;
+        });
+
+        // Düzenleme modu butonu
+        const toggleEditModeBtn = document.getElementById('toggleEditModeBtn');
+        if (toggleEditModeBtn) {
+            const syncEditBtn = () => {
+                toggleEditModeBtn.textContent = editModeEnabled ? 'Düzenleme Modu: Açık' : 'Düzenleme Modu: Kapalı';
+                toggleEditModeBtn.classList.toggle('btn-success', editModeEnabled);
+                toggleEditModeBtn.classList.toggle('btn-danger', !editModeEnabled);
+            };
+
+            toggleEditModeBtn.addEventListener('click', () => {
+                editModeEnabled = !editModeEnabled;
+                syncEditBtn();
+                showToast(editModeEnabled ? 'Düzenleme modu açıldı. Polygonlara tıklayarak düzenleyebilirsiniz.' : 'Düzenleme modu kapatıldı.', 'success');
+            });
+
+            syncEditBtn();
+        }
+
+        // Dükkan Ekle butonu (tek tıkla konum seç, sonra form aç)
+        const addShopBtn = document.getElementById('addShopBtn');
+        if (addShopBtn) {
+            addShopBtn.addEventListener('click', () => {
+                if (areaDivisionMode) {
+                    showToast('Blok oluşturma modu aktifken dükkan ekleme kapalıdır.', 'error');
+                    return;
+                }
+                addShopMode = true;
+                showToast('Dükkan eklemek için haritaya bir kez tıklayın.', 'success');
+            });
+        }
+        
+        // Firestore'dan verileri anlık çek ve haritaya ekle
+        const dukkanlarRef = collection(db, 'dukkanlar');
+        const dukkanlarQuery = query(dukkanlarRef, orderBy('no'));
+        
+        onSnapshot(dukkanlarQuery, (snapshot) => {
+            // Önce tüm marker/polygon/label katmanlarını temizle
+            Object.values(markers).forEach(marker => {
+                map.removeLayer(marker);
+            });
+            Object.keys(markers).forEach(key => delete markers[key]);
+            
+            Object.values(shopPolygons).forEach(obj => {
+                if (obj?.polygon) map.removeLayer(obj.polygon);
+                if (obj?.label) map.removeLayer(obj.label);
+            });
+            Object.keys(shopPolygons).forEach(key => delete shopPolygons[key]);
+            
+            const shopsArray = snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .map(normalizeShopDisplay)
+                .sort((a, b) => {
+                    const aNo = a.noNum ?? Number.POSITIVE_INFINITY;
+                    const bNo = b.noNum ?? Number.POSITIVE_INFINITY;
+                    return aNo - bNo;
+                });
+
+            // Yeni verileri ekle
+            shopsArray.forEach((shop) => {
+                
+                // Polygon varsa polygon olarak çiz
+                const normalizedPolygon = normalizePolygonCoords(shop.polygonCoords);
+                if (normalizedPolygon.length >= 3) {
+                    const color = shop.program === 'atlas' ? '#10b981' : '#ef4444';
+                    
+                    // Merkez (coords) yoksa polygon'dan hesapla
+                    let center = shop.coords;
+                    if (!center || !Array.isArray(center) || center.length !== 2) {
+                        const lats = normalizedPolygon.map(c => c[0]);
+                        const lngs = normalizedPolygon.map(c => c[1]);
+                        center = [(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2];
+                    }
+                    
+                    const polygon = L.polygon(normalizedPolygon, {
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.4,
+                        weight: 2,
+                        className: `shop-polygon ${shop.program === 'atlas' ? 'atlas' : 'diger'}`
+                    }).addTo(map);
+                    
+                    const label = L.marker(center, {
+                        icon: L.divIcon({
+                            className: 'polygon-label',
+                            html: `<div style="
+                                font-size: 18px;
+                                font-weight: bold;
+                                color: white;
+                                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                                text-align: center;
+                                background: rgba(0,0,0,0.5);
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                            ">${shop.no || ''}</div>`,
+                            iconSize: [60, 30],
+                            iconAnchor: [30, 15]
+                        })
+                    }).addTo(map);
+                    
+                    polygon.on('click', () => {
+                        if (!editModeEnabled) {
+                            showToast('Düzenlemek için önce "Düzenleme Modu"nu açın.', 'error');
+                            return;
+                        }
+                        document.getElementById('detailShopName').value = shop.name || '';
+                        document.getElementById('detailShopNo').value = shop.no || '';
+                        document.getElementById('detailShopProgram').value = shop.program || 'diger';
+                        const vergiInput = document.getElementById('detailShopVergiNo');
+                        const telInput = document.getElementById('detailShopTelefon');
+                        if (vergiInput) vergiInput.value = shop.vergiNo || '';
+                        if (telInput) telInput.value = shop.telefon || '';
+                        
+                        document.getElementById('shopDetailModal').style.display = 'block';
+                        window.currentEditingShopDocId = shop.id;
+                        window.currentEditingShopPolygon = polygon;
+                        window.currentEditingShopLabel = label;
+                        window.currentEditingShopPolygonCoords = normalizedPolygon;
+                        window.currentEditingShopCenter = center;
+                    });
+                    
+                    shopPolygons[shop.id] = { polygon, label };
+                    return;
+                }
+                
+                // Polygon yoksa marker
+                if (!shop.coords || !Array.isArray(shop.coords) || shop.coords.length !== 2) {
+                    return;
+                }
+                
+                const icon = shop.program === 'atlas' ? greenIcon : redIcon;
+                const marker = L.marker(shop.coords, { icon: icon })
+                    .bindPopup(`
+                        <div style="text-align: center; padding: 8px;">
+                            <h3 style="font-weight: bold; margin-bottom: 8px;">${shop.name || 'İsimsiz'}</h3>
+                            <p style="margin: 4px 0;"><strong>Dükkan No:</strong> ${shop.no || '-'}</p>
+                            <p style="margin: 4px 0;">
+                                <strong>Program:</strong> 
+                                <span style="color: ${shop.program === 'atlas' ? '#10b981' : '#ef4444'};">
+                                    ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
+                                </span>
+                            </p>
+                        </div>
+                    `)
+                    .addTo(map);
+                
+                markers[shop.id] = marker;
+            });
+
+            // Tabloyu güncelle
+            shopsArray.forEach(shop => {
+                shopsData[shop.id] = shop;
+            });
+            updateTable(shopsArray);
+        });
+        
+        // Tablo güncelleme
+        function updateTable(shops) {
+            const tbody = document.getElementById('shopTableBody');
+            tbody.innerHTML = '';
+            
+            if (shops.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-400">Henüz dükkan eklenmemiş</td></tr>';
+                return;
+            }
+            
+            const sorted = [...shops].sort((a, b) => {
+                const aNo = (a.noNum ?? normalizeShopNo(a.no, a.name)) ?? Number.POSITIVE_INFINITY;
+                const bNo = (b.noNum ?? normalizeShopNo(b.no, b.name)) ?? Number.POSITIVE_INFINITY;
+                return aNo - bNo;
+            });
+
+            sorted.forEach(shop => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-700 hover:bg-gray-800';
+                row.innerHTML = `
+                    <td class="px-6 py-4 text-gray-200">${(shop.name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                    <td class="px-6 py-4 text-gray-300">${(shop.no || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                    <td class="px-6 py-4">
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${
+                            shop.program === 'atlas' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : 'bg-red-900/30 text-red-400'
+                        }">
+                            ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-300 text-sm">
+                        ${shop.coords ? `${shop.coords[0].toFixed(6)}, ${shop.coords[1].toFixed(6)}` : '-'}
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex gap-2">
+                            <button 
+                                onclick="editShop('${shop.id}')" 
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition"
+                            >
+                                Düzenle
+                            </button>
+                            <button 
+                                onclick="deleteShop('${shop.id}')" 
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition"
+                            >
+                                SİL
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Silme fonksiyonu (global scope'a ekle)
+        window.deleteShop = async function(shopId) {
+            if (!confirm('Bu dükkânı silmek istediğinize emin misiniz?')) {
+                return;
+            }
+            
+            try {
+                await deleteDoc(doc(db, 'dukkanlar', shopId));
+                showToast('Dükkan başarıyla silindi!', 'success');
+            } catch (error) {
+                console.error('Hata:', error);
+                showToast('Dükkan silinirken bir hata oluştu!', 'error');
+            }
+        };
+        
+        // Alan Bölme İşlevleri
+        const areaDivisionPanel = document.getElementById('areaDivisionPanel');
+        const toggleAreaDivisionBtn = document.getElementById('toggleAreaDivisionBtn');
+        const startDivisionBtn = document.getElementById('startDivisionBtn');
+        const clearDivisionBtn = document.getElementById('clearDivisionBtn');
+        const divideAreaBtn = document.getElementById('divideAreaBtn');
+        const selectedPointsDisplay = document.getElementById('selectedPointsDisplay');
+        const divisionStatus = document.getElementById('divisionStatus');
+        
+        // Panel açma/kapama
+        toggleAreaDivisionBtn.addEventListener('click', () => {
+            const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+            const isHidden = (areaDivisionPanel.style.display === 'none' || !areaDivisionPanel.style.display);
+
+            if (isHidden) {
+                areaDivisionPanel.style.display = 'block';
+                if (isMobile) {
+                    requestAnimationFrame(() => areaDivisionPanel.classList.add('open'));
+                }
+            } else {
+                areaDivisionPanel.classList.remove('open');
+                areaDivisionMode = false;
+                if (isMobile) {
+                    setTimeout(() => {
+                        areaDivisionPanel.style.display = 'none';
+                    }, 260);
+                } else {
+                    areaDivisionPanel.style.display = 'none';
+                }
+            }
+        });
+        
+        // Alan bölme modunu başlat
+        startDivisionBtn.addEventListener('click', () => {
+            areaDivisionMode = true;
+            selectedPoints = [];
+            selectedPointsDisplay.textContent = '0/4';
+            divisionStatus.textContent = 'Haritaya 4 nokta tıklayın';
+            divideAreaBtn.disabled = true;
+            showToast('Alan seçim modu aktif! Haritaya 4 nokta tıklayın.', 'success');
+        });
+        
+        // Temizle
+        clearDivisionBtn.addEventListener('click', () => {
+            areaDivisionMode = false;
+            selectedPoints = [];
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker && layer.options.icon?.options?.className === 'point-marker') {
+                    map.removeLayer(layer);
+                }
+                if (layer instanceof L.Polygon && layer.options.fillColor === '#3b82f6') {
+                    map.removeLayer(layer);
+                }
+            });
+            selectedPointsDisplay.textContent = '0/4';
+            divisionStatus.textContent = '';
+            divideAreaBtn.disabled = true;
+        });
+        
+        // Başlangıç ve bitiş numarası değişikliğinde hesaplama
+        const startNoInput = document.getElementById('startNoInput');
+        const endNoInput = document.getElementById('endNoInput');
+        const calculatedShopCount = document.getElementById('calculatedShopCount');
+        
+        function calculateShopCount() {
+            const startNo = parseInt(startNoInput.value);
+            const endNo = parseInt(endNoInput.value);
+            
+            if (startNo && endNo && endNo >= startNo) {
+                const count = endNo - startNo + 1;
+                calculatedShopCount.textContent = `Toplam ${count} dükkan oluşturulacak (${startNo} - ${endNo})`;
+                calculatedShopCount.style.color = '#10b981';
+            } else if (startNo && endNo) {
+                calculatedShopCount.textContent = 'Bitiş numarası başlangıç numarasından küçük olamaz!';
+                calculatedShopCount.style.color = '#ef4444';
+            } else {
+                calculatedShopCount.textContent = '';
+            }
+        }
+        
+        startNoInput.addEventListener('input', calculateShopCount);
+        endNoInput.addEventListener('input', calculateShopCount);
+        
+        // Alanı böl
+        divideAreaBtn.addEventListener('click', async () => {
+            const startNo = parseInt(startNoInput.value);
+            const endNo = parseInt(endNoInput.value);
+            
+            if (!startNo || !endNo || endNo < startNo) {
+                showToast('Lütfen geçerli başlangıç ve bitiş numaraları girin!', 'error');
+                return;
+            }
+            
+            if (selectedPoints.length !== 4) {
+                showToast('Lütfen 4 nokta seçin!', 'error');
+                return;
+            }
+            
+            // Dükkan sayısını hesapla
+            const shopCount = endNo - startNo + 1;
+            
+            if (shopCount < 1 || shopCount > 200) {
+                showToast('Dükkan sayısı 1-200 arasında olmalıdır!', 'error');
+                return;
+            }
+            
+            // Bölme yönünü al
+            const direction = document.querySelector('input[name="divisionDirection"]:checked').value;
+            
+            // Benzersiz blok ID oluştur
+            const blockId = `block_${Date.now()}`;
+            
+            // Poligonu böl
+            const shops = dividePolygonIntoShops(selectedPoints, shopCount, direction);
+            
+            if (shops.length === 0) {
+                showToast('Alan bölme işlemi başarısız!', 'error');
+                return;
+            }
+            
+            divisionStatus.textContent = `${shops.length} dükkan oluşturuluyor...`;
+
+            console.log('[BLOK] Başlat', {
+                startNo,
+                endNo,
+                shopCount,
+                direction,
+                blockId,
+                selectedPoints
+            });
+
+            // Numara başlangıç köşesi: Sol Üst / Sağ Üst
+            // Basit ama stabil: önce lat (üstten alta), sonra lng (seçilen köşeye göre)
+            const startCorner = document.querySelector('input[name="startCorner"]:checked')?.value || 'topRight';
+            const numberedShops = [...shops].sort((a, b) => {
+                const latA = Array.isArray(a.center) ? a.center[0] : 0;
+                const latB = Array.isArray(b.center) ? b.center[0] : 0;
+                if (latA !== latB) return latB - latA; // üstten alta
+
+                const lngA = Array.isArray(a.center) ? a.center[1] : 0;
+                const lngB = Array.isArray(b.center) ? b.center[1] : 0;
+                return startCorner === 'topLeft' ? (lngA - lngB) : (lngB - lngA);
+            });
+
+            // Firestore'a tek seferde yaz (hız/garanti)
+            const batch = writeBatch(db);
+
+            // Önce tüm kayıtları array'de topla, sonra batch'e yaz
+            const shopsToSave = [];
+
+            // Her dükkan için polygon oluştur
+            let savedCount = 0;
+            for (let i = 0; i < numberedShops.length; i++) {
+                const shop = numberedShops[i];
+                const shopNo = startNo + i; // Ardışık numaralandırma
+                
+                // Polygon oluştur
+                const shopPolygon = L.polygon(shop.coords, {
+                    color: '#ef4444',
+                    fillColor: '#ef4444',
+                    fillOpacity: 0.4,
+                    weight: 2,
+                    className: 'shop-polygon diger'
+                }).addTo(map);
+                
+                // Polygon ortasına numara ekle
+                const center = shop.center;
+                const label = L.marker(center, {
+                    icon: L.divIcon({
+                        className: 'polygon-label',
+                        html: `<div style="
+                            font-size: 18px;
+                            font-weight: bold;
+                            color: white;
+                            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                            text-align: center;
+                            background: rgba(0,0,0,0.5);
+                            padding: 4px 8px;
+                            border-radius: 4px;
+                        ">${shopNo}</div>`,
+                        iconSize: [60, 30],
+                        iconAnchor: [30, 15]
+                    })
+                }).addTo(map);
+                
+                // Tıklama olayı
+                shopPolygon.on('click', () => {
+                    if (!editModeEnabled) {
+                        showToast('Düzenlemek için önce "Düzenleme Modu"nu açın.', 'error');
+                        return;
+                    }
+                    const existingShop = divisionShopData[shopNo];
+                    document.getElementById('detailShopName').value = existingShop?.name || `Dükkan ${shopNo}`;
+                    document.getElementById('detailShopNo').value = existingShop?.no || shopNo.toString();
+                    document.getElementById('detailShopProgram').value = existingShop?.program || 'diger';
+                    const vergiInput = document.getElementById('detailShopVergiNo');
+                    const telInput = document.getElementById('detailShopTelefon');
+                    if (vergiInput) vergiInput.value = existingShop?.vergiNo || '';
+                    if (telInput) telInput.value = existingShop?.telefon || '';
+                    
+                    document.getElementById('shopDetailModal').style.display = 'block';
+                    window.currentEditingShopDocId = existingShop?.firebaseId || null;
+                    window.currentEditingShopPolygon = shopPolygon;
+                    window.currentEditingShopLabel = label;
+                    window.currentEditingShopPolygonCoords = shop.coords;
+                    window.currentEditingShopCenter = shop.center;
+                });
+
+                // Firestore verisi (blokId dahil)
+                const shopData = {
+                    name: `Dükkan ${shopNo}`,
+                    no: shopNo,
+                    program: 'diger',
+                    coords: shop.center,
+                    polygonCoords: polygonCoordsToObjects(shop.coords),
+                    blockId: blockId
+                };
+
+                // Her dükkan için deterministik docId (debug ve blok silme için faydalı)
+                const docId = `${blockId}_${shopNo}`;
+                const docRef = doc(db, 'dukkanlar', docId);
+
+                shopsToSave.push({
+                    docRef,
+                    docId,
+                    shopNo,
+                    shopData,
+                    shopPolygon,
+                    label
+                });
+                savedCount++;
+            }
+
+            shopsToSave.forEach((entry, idx) => {
+                console.log('[BLOK] set', { i: idx, shopNo: entry.shopNo, docId: entry.docId });
+                batch.set(entry.docRef, entry.shopData);
+                divisionShopData[entry.shopNo] = { ...entry.shopData, id: entry.docId, firebaseId: entry.docId };
+                window[`shopPolygon_${entry.docId}`] = entry.shopPolygon;
+                window[`shopLabel_${entry.docId}`] = entry.label;
+            });
+
+            try {
+                console.log('[BLOK] writeBatch commit ->', { savedCount, blockId, dbReady: !!db });
+                await batch.commit();
+                console.log('[BLOK] writeBatch commit OK', { savedCount, blockId });
+            } catch (error) {
+                console.error('[BLOK] writeBatch commit HATA', error);
+                showToast('Blok kaydedilemedi! Console kontrol edin.', 'error');
+                divisionStatus.textContent = 'Kayıt başarısız.';
+                return;
+            }
+
+            alert('Blok başarıyla kaydedildi!');
+            showToast(`${savedCount} dükkan başarıyla kaydedildi!`, 'success');
+            divisionStatus.textContent = `${savedCount} dükkan kaydedildi. (Blok ID: ${blockId})`;
+            areaDivisionMode = false;
+
+            // Seçimleri temizle
+            selectedPoints = [];
+            selectedPointsDisplay.textContent = '0/4';
+            divideAreaBtn.disabled = true;
+            startNoInput.value = '';
+            endNoInput.value = '';
+            calculatedShopCount.textContent = '';
+
+            // Haritadaki seçim işaretlerini temizle (mavi seçim polygonu + nokta markerları)
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker && layer.options.icon?.options?.className === 'point-marker') {
+                    map.removeLayer(layer);
+                }
+                if (layer instanceof L.Polygon && layer.options.fillColor === '#3b82f6') {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Blok listesini güncelle
+            await updateBlockList();
+
+            // Mobilde bottom-sheet otomatik kapat
+            const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+            if (isMobile) {
+                areaDivisionPanel.classList.remove('open');
+                setTimeout(() => {
+                    areaDivisionPanel.style.display = 'none';
+                }, 260);
+            }
+        });
+        // Dükkan detay formu
+        const shopDetailForm = document.getElementById('shopDetailForm');
+        const cancelDetailBtn = document.getElementById('cancelDetailBtn');
+        
+        shopDetailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const docId = window.currentEditingShopDocId;
+            const shopPolygon = window.currentEditingShopPolygon;
+            const polygonCoords = window.currentEditingShopPolygonCoords;
+            const center = window.currentEditingShopCenter;
+            const label = window.currentEditingShopLabel;
+            
+            if (!shopPolygon) return;
+
+            if (!document.getElementById('detailShopNo').value.trim()) {
+                showToast('Dükkan no boş olamaz!', 'error');
+                return;
+            }
+            
+            const shopData = {
+                name: document.getElementById('detailShopName').value.trim(),
+                no: document.getElementById('detailShopNo').value.trim(),
+                program: document.getElementById('detailShopProgram').value,
+                vergiNo: document.getElementById('detailShopVergiNo')?.value.trim() || '',
+                telefon: document.getElementById('detailShopTelefon')?.value.trim() || '',
+                coords: center,
+                polygonCoords: polygonCoordsToObjects(polygonCoords)
+            };
+            
+            // Polygon rengini güncelle
+            const color = shopData.program === 'atlas' ? '#10b981' : '#ef4444';
+            shopPolygon.setStyle({
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.3
+            });
+            
+            // Firebase'de güncelle
+            try {
+                if (docId) {
+                    await updateDoc(doc(db, 'dukkanlar', docId), shopData);
+                } else {
+                    const docRef = await addDoc(collection(db, 'dukkanlar'), shopData);
+                    window.currentEditingShopDocId = docRef.id;
+                }
+                
+                // Label güncelle
+                if (label && shopData.coords && Array.isArray(shopData.coords)) {
+                    label.setLatLng(shopData.coords);
+                    label.setIcon(L.divIcon({
+                        className: 'polygon-label',
+                        html: `<div style="
+                            font-size: 18px;
+                            font-weight: bold;
+                            color: white;
+                            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                            text-align: center;
+                            background: rgba(0,0,0,0.5);
+                            padding: 4px 8px;
+                            border-radius: 4px;
+                        ">${shopData.no || ''}</div>`,
+                        iconSize: [60, 30],
+                        iconAnchor: [30, 15]
+                    }));
+                }
+                
+                showToast('Dükkan bilgileri kaydedildi!', 'success');
+            } catch (error) {
+                console.error('Hata:', error);
+                showToast('Dükkan kaydedilirken bir hata oluştu!', 'error');
+            }
+            
+            document.getElementById('shopDetailModal').style.display = 'none';
+        });
+        
+        cancelDetailBtn.addEventListener('click', () => {
+            document.getElementById('shopDetailModal').style.display = 'none';
+        });
+        
+        // Blok Listesi İşlevleri
+        const blockListPanel = document.getElementById('blockListPanel');
+        const toggleBlockListBtn = document.getElementById('toggleBlockListBtn');
+        const blockList = document.getElementById('blockList');
+        let blockData = {};
+        
+        toggleBlockListBtn.addEventListener('click', () => {
+            if (blockListPanel.style.display === 'none' || !blockListPanel.style.display) {
+                blockListPanel.style.display = 'block';
+                updateBlockList();
+            } else {
+                blockListPanel.style.display = 'none';
+            }
+        });
+        
+        // Blok listesini güncelle
+        async function updateBlockList() {
+            try {
+                const dukkanlarRef = collection(db, 'dukkanlar');
+                const snapshot = await getDocs(dukkanlarRef);
+                
+                // Blok ID'lere göre grupla
+                const blocks = {};
+                snapshot.forEach((doc) => {
+                    const shop = { id: doc.id, ...doc.data() };
+                    if (shop.blockId) {
+                        if (!blocks[shop.blockId]) {
+                            blocks[shop.blockId] = {
+                                blockId: shop.blockId,
+                                shops: [],
+                                count: 0
+                            };
+                        }
+                        blocks[shop.blockId].shops.push(shop);
+                        blocks[shop.blockId].count++;
+                    }
+                });
+                
+                // Blokları tarihe göre sırala (en yeni önce)
+                const blockArray = Object.values(blocks).sort((a, b) => {
+                    const timeA = parseInt(a.blockId.split('_')[1]);
+                    const timeB = parseInt(b.blockId.split('_')[1]);
+                    return timeB - timeA;
+                });
+                
+                blockList.innerHTML = '';
+                
+                if (blockArray.length === 0) {
+                    blockList.innerHTML = '<div class="text-gray-400 text-center py-8">Henüz blok oluşturulmamış</div>';
+                    return;
+                }
+                
+                function parseShopNo(no) {
+                    if (no === null || no === undefined) return null;
+                    const n = parseInt(String(no).trim(), 10);
+                    return Number.isFinite(n) ? n : null;
+                }
+                
+                blockArray.forEach(block => {
+                    const blockItem = document.createElement('div');
+                    blockItem.className = 'block-item';
+                    
+                    const date = new Date(parseInt(block.blockId.split('_')[1]));
+                    const dateStr = date.toLocaleString('tr-TR');
+                    
+                    const nums = block.shops.map(s => parseShopNo(s.no)).filter(n => n !== null);
+                    const minNo = nums.length ? Math.min(...nums) : null;
+                    const maxNo = nums.length ? Math.max(...nums) : null;
+                    const title = (minNo !== null && maxNo !== null) ? `Blok ${minNo}-${maxNo}` : `Blok ${block.blockId}`;
+                    
+                    blockItem.innerHTML = `
+                        <div class="mb-2">
+                            <div class="font-semibold text-gray-200">${title}</div>
+                            <div class="text-xs text-gray-500">Blok ID: ${block.blockId}</div>
+                            <div class="text-sm text-gray-400">${dateStr}</div>
+                            <div class="text-sm text-gray-300 mt-1">${block.count} dükkan</div>
+                        </div>
+                        <button 
+                            onclick="deleteBlock('${block.blockId}')" 
+                            class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition"
+                        >
+                            Bloğu Komple Sil
+                        </button>
+                    `;
+                    
+                    blockList.appendChild(blockItem);
+                });
+                
+                blockData = blocks;
+            } catch (error) {
+                console.error('Blok listesi güncellenirken hata:', error);
+            }
+        }
+        
+        // Blok silme fonksiyonu
+        window.deleteBlock = async function(blockId) {
+            if (!confirm(`Bu bloğa ait tüm dükkanları silmek istediğinize emin misiniz?`)) {
+                return;
+            }
+            
+            try {
+                const dukkanlarRef = collection(db, 'dukkanlar');
+                const snapshot = await getDocs(query(dukkanlarRef, where('blockId', '==', blockId)));
+                
+                let deletedCount = 0;
+                let batch = writeBatch(db);
+                let batchCount = 0;
+                const commitPromises = [];
+                
+                snapshot.forEach((docSnap) => {
+                    batch.delete(docSnap.ref);
+                    deletedCount++;
+                    batchCount++;
+                    
+                    if (batchCount >= 450) {
+                        commitPromises.push(batch.commit());
+                        batch = writeBatch(db);
+                        batchCount = 0;
+                    }
+                    
+                    // Haritadan kaldır
+                    if (markers[docSnap.id]) {
+                        map.removeLayer(markers[docSnap.id]);
+                        delete markers[docSnap.id];
+                    }
+                    if (shopPolygons[docSnap.id]) {
+                        if (shopPolygons[docSnap.id].polygon) map.removeLayer(shopPolygons[docSnap.id].polygon);
+                        if (shopPolygons[docSnap.id].label) map.removeLayer(shopPolygons[docSnap.id].label);
+                        delete shopPolygons[docSnap.id];
+                    }
+                });
+                
+                commitPromises.push(batch.commit());
+                await Promise.all(commitPromises);
+                showToast(`${deletedCount} dükkan başarıyla silindi!`, 'success');
+                updateBlockList();
+            } catch (error) {
+                console.error('Hata:', error);
+                showToast('Blok silinirken bir hata oluştu!', 'error');
+            }
+        };
+        
+        // Firestore değişikliklerini dinle ve blok listesini güncelle
+        onSnapshot(collection(db, 'dukkanlar'), () => {
+            updateBlockList();
+        });
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #0f172a;
+        }
+        
+        #map {
+            height: calc(50vh - 32px);
+            width: 100vw;
+            margin-top: 64px;
+        }
+        
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+        }
+        
+        .form-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.98);
+            backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+            z-index: 4000;
+            min-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 12px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 12px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .form-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .table-container {
+            height: calc(50vh);
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .table-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .table-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        .nav-link {
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: #e2e8f0;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-link.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Toast Mesaj Stilleri */
+        .toast {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 5000;
+            font-weight: 600;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateX(400px);
+            transition: all 0.3s ease;
+            max-width: 400px;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .toast-error {
+            background: rgba(239, 68, 68, 0.95);
+            color: white;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .toast-success {
+            background: rgba(16, 185, 129, 0.95);
+            color: white;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Sınır Çizgisi Stilleri */
+        .boundary-polygon {
+            filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+        }
+        
+        /* Blok Listesi Panel */
+        .block-list-panel {
+            position: fixed;
+            top: 84px;
+            right: 20px;
+            width: 320px;
+            max-height: calc(50vh - 100px);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+        
+        .block-item {
+            padding: 16px;
+            margin: 8px 0;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .block-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Polygon Label Stilleri */
+        .polygon-label {
+            position: absolute;
+            pointer-events: none;
+            font-weight: bold;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+        }
+        
+        /* Alan Bölme Panel */
+        .area-division-panel {
+            position: fixed;
+            top: 84px;
+            left: 20px;
+            width: 320px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            #map {
+                height: calc(100vh - 56px - 72px);
+                margin-top: 56px;
+            }
+
+            .navbar {
+                display: none;
+            }
+
+            .admin-app-header {
+                display: flex;
+            }
+
+            .admin-bottom-nav {
+                display: flex;
+            }
+
+            .area-division-panel {
+                left: 0;
+                top: auto;
+                bottom: 0;
+                width: 100vw;
+                max-height: min(70vh, 560px);
+                overflow-y: auto;
+                border-radius: 16px 16px 0 0;
+                transform: translateY(100%);
+                transition: transform 0.25s ease;
+                padding: 16px;
+                z-index: 7000;
+            }
+
+            .area-division-panel.open {
+                transform: translateY(0);
+            }
+
+            .table-container {
+                position: fixed;
+                top: 56px;
+                left: 0;
+                right: 0;
+                bottom: 72px;
+                height: auto;
+                max-height: unset;
+                overflow: auto;
+                z-index: 2000;
+            }
+
+            .form-modal {
+                top: 64px;
+                left: 0;
+                transform: none;
+                width: 100vw;
+                max-width: none;
+                height: calc(100vh - 64px);
+                overflow-y: auto;
+                border-radius: 16px 16px 0 0;
+                padding: 16px;
+                z-index: 8000;
+            }
+
+            .btn {
+                padding: 12px 16px;
+                min-height: 44px;
+            }
+
+            body.admin-tab-list #map {
+                display: none;
+            }
+
+            body.admin-tab-map .table-container {
+                display: none;
+            }
+        }
+
+        .leaflet-control-zoom a {
+            width: 44px;
+            height: 44px;
+            line-height: 44px;
+            font-size: 20px;
+        }
+
+        .leaflet-touch .leaflet-control-zoom a {
+            width: 48px;
+            height: 48px;
+            line-height: 48px;
+        }
+
+        .admin-app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 6000;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
+
+        .admin-bottom-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 72px;
+            background: rgba(15, 23, 42, 0.98);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            z-index: 6000;
+            display: none;
+            align-items: center;
+            justify-content: space-around;
+            padding: 8px 10px;
+        }
+
+        .admin-nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            height: 56px;
+            border-radius: 14px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: rgba(226, 232, 240, 0.75);
+            font-weight: 800;
+        }
+
+        .admin-nav-btn.active {
+            background: rgba(59, 130, 246, 0.18);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: #93c5fd;
+        }
+
+        .admin-nav-btn .icon {
+            font-size: 18px;
+            line-height: 18px;
+        }
+
+        .admin-nav-btn .label {
+            font-size: 12px;
+            line-height: 12px;
+        }
+        
+        .shop-polygon {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .shop-polygon:hover {
+            opacity: 0.8;
+            filter: brightness(1.2);
+        }
+        
+        .shop-polygon.atlas {
+            fillColor: #10b981;
+            color: #10b981;
+        }
+        
+        .shop-polygon.diger {
+            fillColor: #ef4444;
+            color: #ef4444;
+        }
+        
+        .shop-polygon.empty {
+            fillColor: #6b7280;
+            color: #6b7280;
+        }
+
+        .login-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: radial-gradient(900px circle at 10% 10%, rgba(59, 130, 246, 0.18), transparent 45%),
+                        radial-gradient(900px circle at 90% 90%, rgba(16, 185, 129, 0.14), transparent 45%),
+                        rgba(15, 23, 42, 0.98);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 16px 60px rgba(0, 0, 0, 0.55);
+        }
+
+        .login-title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #e2e8f0;
+            margin-bottom: 6px;
+        }
+
+        .login-subtitle {
+            font-size: 13px;
+            color: rgba(226, 232, 240, 0.7);
+            margin-bottom: 14px;
+        }
+
+        .login-error {
+            margin-top: 10px;
+            color: #f87171;
+            font-size: 13px;
+            font-weight: 700;
+            min-height: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <div class="login-title">Yönetim Girişi</div>
+            <div class="login-subtitle">Devam etmek için e-posta ve şifren ile giriş yap.</div>
+            <form id="loginForm">
+                <input id="loginEmail" type="email" class="form-input" placeholder="E-posta" autocomplete="username" required />
+                <input id="loginPassword" type="password" class="form-input" placeholder="Şifre" autocomplete="current-password" required />
+                <button type="submit" class="btn btn-primary w-full">Giriş Yap</button>
+                <div id="loginError" class="login-error"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="adminApp" style="display:none;">
+    <header class="admin-app-header">
+        <div class="text-sm font-extrabold text-gray-100" style="letter-spacing:0.2px;">Antalya Hal Takip</div>
+        <button id="mobileLogoutBtn" class="btn btn-danger" type="button">Çıkış</button>
+    </header>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold text-white">Antalya Hal Takip Sistemi</h1>
+        </div>
+        <div class="flex items-center gap-4">
+            <button id="toggleAreaDivisionBtn" class="btn btn-success">Blok Oluştur</button>
+            <button id="addShopBtn" class="btn btn-primary">Dükkan Ekle</button>
+            <button id="toggleEditModeBtn" class="btn btn-danger">Düzenleme Modu: Kapalı</button>
+            <button id="logoutBtn" class="btn btn-danger">Çıkış Yap</button>
+            <a href="index.html" class="nav-link">Kullanıcı Paneli</a>
+            <a href="admin.html" class="nav-link active">Yönetim Paneli</a>
+        </div>
+    </nav>
+
+    <nav class="admin-bottom-nav">
+        <button id="adminTabMapBtn" class="admin-nav-btn active" type="button">
+            <div class="icon">🗺️</div>
+            <div class="label">Harita</div>
+        </button>
+        <button id="adminTabListBtn" class="admin-nav-btn" type="button">
+            <div class="icon">📋</div>
+            <div class="label">Liste</div>
+        </button>
+        <button id="adminActionBlockBtn" class="admin-nav-btn" type="button">
+            <div class="icon">🧱</div>
+            <div class="label">Blok</div>
+        </button>
+        <button id="adminActionAddBtn" class="admin-nav-btn" type="button">
+            <div class="icon">➕</div>
+            <div class="label">Ekle</div>
+        </button>
+    </nav>
+    
+    <!-- Map -->
+    <div id="map"></div>
+    
+    <!-- Alan Bölme Panel -->
+    <div id="areaDivisionPanel" class="area-division-panel" style="display: none;">
+        <h3 class="text-xl font-bold mb-4 text-gray-200">Blok Oluştur</h3>
+        <p class="text-sm text-gray-400 mb-4">Haritaya 4 nokta tıklayarak bir blok alanı seçin</p>
+        
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-2">Seçilen Noktalar:</label>
+            <div id="selectedPointsDisplay" class="text-sm text-gray-400 mb-4">0/4</div>
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-2">Başlangıç No:</label>
+            <input 
+                type="number" 
+                id="startNoInput" 
+                class="form-input" 
+                placeholder="Örn: 40" 
+                min="1"
+            />
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-2">Bitiş No:</label>
+            <input 
+                type="number" 
+                id="endNoInput" 
+                class="form-input" 
+                placeholder="Örn: 60" 
+                min="1"
+            />
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-2">Bölme Yönü:</label>
+            <div class="flex gap-4">
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" name="divisionDirection" value="yatay" class="mr-2" checked>
+                    <span class="text-gray-300">Yatay</span>
+                </label>
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" name="divisionDirection" value="dikey" class="mr-2">
+                    <span class="text-gray-300">Dikey</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-2">Numara Başlangıç Köşesi:</label>
+            <div class="flex gap-4">
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" name="startCorner" value="topLeft" class="mr-2">
+                    <span class="text-gray-300">Sol Üst</span>
+                </label>
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" name="startCorner" value="topRight" class="mr-2" checked>
+                    <span class="text-gray-300">Sağ Üst</span>
+                </label>
+            </div>
+        </div>
+        
+        <div id="calculatedShopCount" class="mb-4 text-sm text-gray-400"></div>
+        
+        <div class="flex gap-2 mb-4">
+            <button id="startDivisionBtn" class="btn btn-primary flex-1">Blok Seçimini Başlat</button>
+            <button id="clearDivisionBtn" class="btn btn-danger flex-1">Temizle</button>
+        </div>
+        
+        <button id="divideAreaBtn" class="btn btn-success w-full mb-4" disabled>Oluştur ve Kaydet</button>
+        
+        <div id="divisionStatus" class="text-sm text-gray-400"></div>
+    </div>
+    
+    <!-- Dükkan Detay Modal -->
+    <div id="shopDetailModal" class="form-modal" style="display: none;">
+        <h3 class="text-xl font-bold mb-4 text-gray-200">Dükkan Bilgileri</h3>
+        <form id="shopDetailForm">
+            <input 
+                type="text" 
+                id="detailShopName" 
+                class="form-input" 
+                placeholder="Dükkan Adı" 
+            />
+            <input 
+                type="text" 
+                id="detailShopNo" 
+                class="form-input" 
+                placeholder="Dükkan No (örn: Blok1-4)" 
+            />
+            <select id="detailShopProgram" class="form-select">
+                <option value="diger">Diğer</option>
+                <option value="atlas">Atlas</option>
+            </select>
+            <input 
+                type="text" 
+                id="detailShopVergiNo" 
+                class="form-input" 
+                placeholder="Vergi No" 
+            />
+            <input 
+                type="tel" 
+                id="detailShopTelefon" 
+                class="form-input" 
+                placeholder="Telefon" 
+            />
+            <div class="flex gap-3 mt-4">
+                <button type="submit" class="btn btn-primary flex-1">Kaydet</button>
+                <button type="button" id="cancelDetailBtn" class="btn btn-danger flex-1">İptal</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Form Modal -->
+    <div id="formModal" class="form-modal" style="display: none;">
+        <h3 id="formTitle" class="text-xl font-bold mb-4 text-gray-200">Yeni Dükkan Ekle</h3>
+        <p id="formSubtitle" class="text-sm text-gray-400 mb-4">Haritaya tıklayarak dükkan konumunu seçin</p>
+        <form id="shopForm">
+            <input 
+                type="text" 
+                id="shopName" 
+                class="form-input" 
+                placeholder="Dükkan Adı" 
+                required
+            />
+            <input 
+                type="text" 
+                id="shopNo" 
+                class="form-input" 
+                placeholder="Dükkan No (örn: A-101)" 
+                required
+            />
+            <select id="shopProgram" class="form-select" required>
+                <option value="">Program Seçin</option>
+                <option value="atlas">Atlas</option>
+                <option value="diger">Diğer</option>
+            </select>
+            <input 
+                type="text" 
+                id="shopVergiNo" 
+                class="form-input" 
+                placeholder="Vergi No" 
+            />
+            <input 
+                type="tel" 
+                id="shopTelefon" 
+                class="form-input" 
+                placeholder="Telefon" 
+            />
+            <div class="flex gap-3 mt-4">
+                <button type="submit" class="btn btn-primary flex-1" id="submitBtn">Kaydet</button>
+                <button type="button" id="cancelBtn" class="btn btn-danger flex-1">İptal</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Blok Listesi Panel -->
+    <div id="blockListPanel" class="block-list-panel" style="display: none;">
+        <h3 class="text-xl font-bold mb-4 text-gray-200">Son Eklenen Bloklar</h3>
+        <div id="blockList" class="space-y-2">
+            <!-- Blok listesi buraya eklenecek -->
+        </div>
+    </div>
+    
+    <!-- Table Container -->
+    <div class="table-container">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-200">Dükkan Listesi</h2>
+                <button id="toggleBlockListBtn" class="btn btn-success">Blokları Göster</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan Adı</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan No</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Program</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Koordinatlar</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shopTableBody">
+                        <!-- Tablo içeriği dinamik olarak eklenecek -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    </div>
+</body>
+</html>
+
