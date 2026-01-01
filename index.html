@@ -25,7 +25,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         
         // Firebase yapılandırması
@@ -42,6 +42,127 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+
+        let __loadingEl = null;
+        let __loadingProgramsReady = false;
+        let __loadingShopsReady = false;
+        const __setLoading = (on) => {
+            if (!__loadingEl) return;
+            __loadingEl.style.display = on ? 'flex' : 'none';
+        };
+        const __maybeFinishLoading = () => {
+            if (__loadingProgramsReady && __loadingShopsReady) {
+                __setLoading(false);
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            __loadingEl = document.getElementById('appLoading');
+            __setLoading(true);
+        });
+
+        // Program Ayarları (Firestore)
+        const settingsRef = doc(db, 'ayarlar', 'programlar');
+
+        function normalizePrograms(rawList) {
+            const list = Array.isArray(rawList) ? rawList : [];
+            const cleaned = list
+                .map(p => ({
+                    value: String(p?.value || '').trim(),
+                    label: String(p?.label || '').trim(),
+                    color: String(p?.color || '').trim()
+                }))
+                .filter(p => !!p.value && !!p.label)
+                .filter(p => p.value !== 'atlas');
+
+            const uniq = new Map();
+            cleaned.forEach(p => {
+                if (!uniq.has(p.value)) {
+                    uniq.set(p.value, {
+                        value: p.value,
+                        label: p.label,
+                        color: p.color || '#ef4444'
+                    });
+                }
+            });
+
+            if (!uniq.has('diger')) {
+                uniq.set('diger', { value: 'diger', label: 'Diğer', color: '#ef4444' });
+            }
+
+            return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label, 'tr'));
+        }
+
+        function getProgramByValue(value) {
+            const vRaw = String(value || '').trim();
+            if (!vRaw) return null;
+            const vLower = vRaw.toLowerCase();
+            const normalizeKey = (s) => String(s || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[\s\-_]+/g, '');
+            const vKey = normalizeKey(vRaw);
+
+            const list = Array.isArray(window.programSettings) ? window.programSettings : [];
+            return (
+                list.find(p => String(p.value || '').trim() === vRaw) ||
+                list.find(p => String(p.value || '').trim().toLowerCase() === vLower) ||
+                list.find(p => String(p.label || '').trim().toLowerCase() === vLower) ||
+                list.find(p => normalizeKey(p.value) === vKey) ||
+                list.find(p => normalizeKey(p.label) === vKey)
+            ) || null;
+        }
+
+        function programLabel(value) {
+            if (value === 'atlas') return 'Atlas';
+            const found = getProgramByValue(value);
+            return found ? found.label : '-';
+        }
+
+        function programColor(shopLike) {
+            const program = String(shopLike?.program || '').trim();
+            const isEmpty = !program;
+            if (shopLike?.kullanilmiyor || isEmpty) return '#fbbf24';
+            if (program === 'atlas') return '#10b981';
+            const found = getProgramByValue(program);
+            return found?.color || '#ef4444';
+        }
+
+        window.programLabel = programLabel;
+        window.programColor = programColor;
+
+        async function ensureSettingsDefaults() {
+            try {
+                const snap = await getDoc(settingsRef);
+                if (!snap.exists()) {
+                    await setDoc(settingsRef, { programlar: normalizePrograms([]) }, { merge: true });
+                    return;
+                }
+                const data = snap.data() || {};
+                if (!Array.isArray(data.programlar)) {
+                    await setDoc(settingsRef, { programlar: normalizePrograms(data.programlar) }, { merge: true });
+                }
+            } catch (e) {
+                console.warn('ensureSettingsDefaults failed', e);
+            }
+        }
+
+        ensureSettingsDefaults();
+
+        onSnapshot(settingsRef, (snap) => {
+            const data = snap.exists() ? snap.data() : {};
+            window.programSettings = normalizePrograms(data?.programlar);
+
+            __loadingProgramsReady = true;
+            __maybeFinishLoading();
+
+            // Popup ve mobil detay eğer açıksa program yazısını güncelle
+            try {
+                if (typeof window.__rerenderMobileDetailProgram === 'function') {
+                    window.__rerenderMobileDetailProgram();
+                }
+            } catch (e) {}
+        });
 
         function syncAdminUi(isAuthed) {
             window.isAdminAuthed = !!isAuthed;
@@ -96,8 +217,8 @@
         // Haritayı oluştur
         const map = L.map('map', {
             center: [centerLat, centerLng],
-            zoom: 18,
-            minZoom: 17,
+            zoom: 16,
+            minZoom: 15,
             maxZoom: 22,
             preferCanvas: true,
             renderer: L.canvas({ padding: 0.5 }),
@@ -131,7 +252,8 @@
         // Haritayı belirtilen alana otomatik hizala
         const polygonBounds = L.polygon(coordinates).getBounds();
         map.fitBounds(polygonBounds, {
-            padding: [20, 20]
+            padding: [20, 20],
+            maxZoom: 17
         });
 
         // Non-module scriptler (bottom-nav / hamburger) map'e erişebilsin
@@ -210,8 +332,15 @@
             });
         };
         
-        const greenIcon = createMarkerIcon('#10b981'); // Atlas - Yeşil
-        const redIcon = createMarkerIcon('#ef4444');   // Diğer - Kırmızı
+        const markerIconCache = {};
+        const getMarkerIconByColor = (color) => {
+            const c = String(color || '').trim() || '#ef4444';
+            if (!markerIconCache[c]) markerIconCache[c] = createMarkerIcon(c);
+            return markerIconCache[c];
+        };
+
+        const greenIcon = getMarkerIconByColor('#10b981'); // Atlas - Yeşil
+        const yellowIcon = getMarkerIconByColor('#fbbf24'); // Kullanılmayan / Boş - Sarı
         
         // Marker'ları saklamak için obje
         let markers = {};
@@ -257,6 +386,8 @@
         function renderShopPopupHtml(shop) {
             const tel = shop.telefon ? String(shop.telefon) : '';
             const vergi = shop.vergiNo ? String(shop.vergiNo) : '';
+            const progColor = (typeof window.programColor === 'function') ? window.programColor(shop) : (shop.program === 'atlas' ? '#10b981' : '#ef4444');
+            const progText = (typeof window.programLabel === 'function') ? window.programLabel(shop.program) : (shop.program === 'atlas' ? 'Atlas' : 'Diğer');
             const telHref = toTelHref(tel);
             const callBtn = telHref
                 ? `<a href="${telHref}" style="display:inline-block;margin-top:8px;padding:8px 12px;border-radius:10px;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;">Ara</a>`
@@ -268,8 +399,8 @@
                     <p style="margin:4px 0;"><strong>Dükkan No:</strong> ${shop.no || '-'}</p>
                     <p style="margin:4px 0;">
                         <strong>Program:</strong>
-                        <span style="color:${shop.program === 'atlas' ? '#10b981' : '#ef4444'};">
-                            ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
+                        <span style="color:${progColor};">
+                            ${progText}
                         </span>
                     </p>
                     <p style="margin:4px 0;"><strong>Vergi No:</strong> ${vergi || '-'}</p>
@@ -303,7 +434,7 @@
             currentDetailShop = shop;
             document.getElementById('mdHeroNo').textContent = shop.no || '-';
             document.getElementById('mdHeroName').textContent = shop.name || 'İsimsiz';
-            document.getElementById('mdProgram').textContent = shop.program === 'atlas' ? 'Atlas' : 'Diğer';
+            document.getElementById('mdProgram').textContent = (typeof window.programLabel === 'function') ? window.programLabel(shop.program) : (shop.program === 'atlas' ? 'Atlas' : 'Diğer');
             document.getElementById('mdVergi').textContent = shop.vergiNo || '-';
             document.getElementById('mdTelefon').textContent = shop.telefon || '-';
 
@@ -321,6 +452,15 @@
             detailSheet.classList.add('open');
             detailOverlay.classList.add('open');
         }
+
+        window.__rerenderMobileDetailProgram = () => {
+            if (!currentDetailShop) return;
+            const el = document.getElementById('mdProgram');
+            if (!el) return;
+            el.textContent = (typeof window.programLabel === 'function')
+                ? window.programLabel(currentDetailShop.program)
+                : (currentDetailShop.program === 'atlas' ? 'Atlas' : 'Diğer');
+        };
 
         if (detailOverlay) detailOverlay.addEventListener('click', closeMobileDetail);
         if (detailCloseBtn) detailCloseBtn.addEventListener('click', closeMobileDetail);
@@ -369,23 +509,120 @@
         // Firestore'dan verileri anlık çek
         const dukkanlarRef = collection(db, 'dukkanlar');
         const dukkanlarQuery = query(dukkanlarRef, orderBy('no'));
-        
+
+        function removeShopLayers(shopId) {
+            const m = markers[shopId];
+            if (!m) return;
+
+            if (m.polygon) {
+                try { map.removeLayer(m.polygon); } catch (e) {}
+            }
+            if (m.label) {
+                try { map.removeLayer(m.label); } catch (e) {}
+            }
+            if (typeof m.removeLayer === 'function') {
+                try { map.removeLayer(m); } catch (e) {}
+            } else if (m instanceof L.Marker || m instanceof L.Polygon) {
+                try { map.removeLayer(m); } catch (e) {}
+            }
+
+            delete markers[shopId];
+        }
+
+        function upsertShopLayers(shop) {
+            removeShopLayers(shop.id);
+
+            const normalizedPolygon = normalizePolygonCoords(shop.polygonCoords);
+            const isEmpty = !String(shop.program || '').trim();
+            const color = (typeof window.programColor === 'function')
+                ? window.programColor(shop)
+                : ((shop.kullanilmiyor || isEmpty) ? '#fbbf24' : (shop.program === 'atlas' ? '#10b981' : '#ef4444'));
+
+            if (normalizedPolygon.length >= 3) {
+                const lats = normalizedPolygon.map(c => c[0]);
+                const lngs = normalizedPolygon.map(c => c[1]);
+                const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+                const polygon = L.polygon(normalizedPolygon, {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.4,
+                    weight: isMobile ? 2 : 2,
+                    className: `shop-polygon ${shop.kullanilmiyor ? 'kullanilmiyor' : (isEmpty ? 'empty' : (shop.program === 'atlas' ? 'atlas' : 'diger'))}`
+                })
+                .bindTooltip(shop.name || shop.no || 'İsimsiz', {
+                    permanent: false,
+                    direction: 'center'
+                })
+                .bindPopup(renderShopPopupHtml(shop))
+                .addTo(map);
+
+                polygon.on('click', () => {
+                    openMobileDetail(shop);
+                });
+
+                const label = L.marker([centerLat, centerLng], {
+                    icon: L.divIcon({
+                        className: 'polygon-label',
+                        html: `<div style="
+                            font-size: 18px;
+                            font-weight: bold;
+                            color: white;
+                            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                            text-align: center;
+                            background: rgba(0,0,0,0.5);
+                            padding: 4px 8px;
+                            border-radius: 4px;
+                        ">${shop.no || ''}</div>`,
+                        iconSize: [60, 30],
+                        iconAnchor: [30, 15]
+                    })
+                });
+
+                if (shouldShowLabels()) {
+                    label.addTo(map);
+                }
+
+                markers[shop.id] = { polygon, label };
+                return;
+            }
+
+            if (shop.coords && Array.isArray(shop.coords) && shop.coords.length === 2) {
+                const icon = (shop.kullanilmiyor || isEmpty)
+                    ? yellowIcon
+                    : (shop.program === 'atlas' ? greenIcon : getMarkerIconByColor(color));
+
+                const marker = L.marker(shop.coords, { icon: icon })
+                    .bindPopup(renderShopPopupHtml(shop))
+                    .addTo(map);
+
+                marker.__labelText = shop.name || 'İsimsiz';
+                marker.__labelBound = false;
+
+                marker.on('click', () => {
+                    openMobileDetail(shop);
+                });
+
+                markers[shop.id] = marker;
+                return;
+            }
+
+            console.warn('Geçersiz koordinat:', shop);
+        }
+
         onSnapshot(dukkanlarQuery, (snapshot) => {
-            // Önce tüm marker'ları temizle
-            Object.values(markers).forEach(markerObj => {
-                if (markerObj.polygon) {
-                    map.removeLayer(markerObj.polygon);
+            snapshot.docChanges().forEach((ch) => {
+                const shop = { id: ch.doc.id, ...ch.doc.data() };
+                const normalized = normalizeShopDisplay(shop);
+
+                if (ch.type === 'removed') {
+                    removeShopLayers(normalized.id);
+                    return;
                 }
-                if (markerObj.label) {
-                    map.removeLayer(markerObj.label);
-                }
-                if (typeof markerObj.removeLayer === 'function') {
-                    map.removeLayer(markerObj);
-                } else if (markerObj instanceof L.Marker || markerObj instanceof L.Polygon) {
-                    map.removeLayer(markerObj);
-                }
+
+                upsertShopLayers(normalized);
             });
-            markers = {};
 
             const shopsArray = snapshot.docs
                 .map(d => ({ id: d.id, ...d.data() }))
@@ -397,90 +634,13 @@
                     const bSafe = Number.isFinite(bNo) ? bNo : Number.POSITIVE_INFINITY;
                     return aSafe - bSafe;
                 });
-            
-            // Yeni verileri ekle
-            shopsArray.forEach((shop) => {
-                
-                // Polygon koordinatları varsa polygon olarak göster
-                const normalizedPolygon = normalizePolygonCoords(shop.polygonCoords);
-                if (normalizedPolygon.length >= 3) {
-                    const color = shop.program === 'atlas' ? '#10b981' : '#ef4444';
-                    const fillOpacity = 0.4; // Yarı şeffaf
-                    
-                    // Polygon merkezini hesapla
-                    const lats = normalizedPolygon.map(c => c[0]);
-                    const lngs = normalizedPolygon.map(c => c[1]);
-                    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-                    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-                    
-                    const polygon = L.polygon(normalizedPolygon, {
-                        color: color,
-                        fillColor: color,
-                        fillOpacity: fillOpacity,
-                        weight: isMobile ? 4 : 2,
-                        className: `shop-polygon ${shop.program === 'atlas' ? 'atlas' : 'diger'}`
-                    })
-                    .bindTooltip(shop.name || shop.no || 'İsimsiz', {
-                        permanent: false,
-                        direction: 'center'
-                    })
-                    .bindPopup(renderShopPopupHtml(shop))
-                    .addTo(map);
 
-                    polygon.on('click', () => {
-                        openMobileDetail(shop);
-                    });
-                    
-                    // Polygon ortasına numara ekle
-                    const label = L.marker([centerLat, centerLng], {
-                        icon: L.divIcon({
-                            className: 'polygon-label',
-                            html: `<div style="
-                                font-size: 18px;
-                                font-weight: bold;
-                                color: white;
-                                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-                                text-align: center;
-                                background: rgba(0,0,0,0.5);
-                                padding: 4px 8px;
-                                border-radius: 4px;
-                            ">${shop.no || ''}</div>`,
-                            iconSize: [60, 30],
-                            iconAnchor: [30, 15]
-                        })
-                    });
-
-                    if (shouldShowLabels()) {
-                        label.addTo(map);
-                    }
-                    
-                    markers[shop.id] = { polygon, label };
-                } else if (shop.coords && Array.isArray(shop.coords) && shop.coords.length === 2) {
-                    // Normal marker (nokta koordinat)
-                    const icon = shop.program === 'atlas' ? greenIcon : redIcon;
-                    
-                    const marker = L.marker(shop.coords, { icon: icon })
-                        .bindPopup(renderShopPopupHtml(shop))
-                        .addTo(map);
-
-                    marker.__labelText = shop.name || 'İsimsiz';
-                    marker.__labelBound = false;
-
-                    marker.on('click', () => {
-                        openMobileDetail(shop);
-                    });
-                    
-                    markers[shop.id] = marker;
-                } else {
-                    console.warn('Geçersiz koordinat:', shop);
-                }
-            });
-            
-            // Sidebar listesini güncelle
             updateShopList(shopsArray);
             updateStats(shopsArray);
-
             scheduleSyncLabelVisibility();
+
+            __loadingShopsReady = true;
+            __maybeFinishLoading();
         });
         
         // Sidebar işlevleri
@@ -515,7 +675,8 @@
                 if (!shop.coords || !Array.isArray(shop.coords)) return;
                 
                 const shopItem = document.createElement('div');
-                shopItem.className = `shop-item ${shop.program === 'atlas' ? 'atlas' : 'diger'}`;
+                const isEmpty = !String(shop.program || '').trim();
+                shopItem.className = `shop-item ${shop.kullanilmiyor ? 'kullanilmiyor' : (isEmpty ? 'empty' : (shop.program === 'atlas' ? 'atlas' : 'diger'))}`;
                 shopItem.innerHTML = `
                     <div class="font-semibold text-gray-200 mb-1">${shop.name || 'İsimsiz'}</div>
                     <div class="text-sm text-gray-400">${shop.no || '-'}</div>
@@ -582,16 +743,90 @@
         
         // İstatistikleri güncelle
         function updateStats(shops) {
-            const total = shops.length;
-            const atlasCount = shops.filter(s => s.program === 'atlas').length;
-            const digerCount = shops.filter(s => s.program !== 'atlas').length;
-            const completedCount = shops.filter(s => String(s.vergiNo || '').trim() && String(s.telefon || '').trim()).length;
-            
-            document.getElementById('totalShops').textContent = total;
-            document.getElementById('atlasCount').textContent = atlasCount;
-            document.getElementById('digerCount').textContent = digerCount;
-            const cc = document.getElementById('completedCount');
-            if (cc) cc.textContent = completedCount;
+            try {
+                const total = shops.length;
+
+                document.getElementById('totalShops').textContent = total;
+
+                const normalizeKey = (s) => String(s || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[\s\-_]+/g, '');
+
+                const programList = Array.isArray(window.programSettings) ? window.programSettings : [];
+                const known = new Map(programList.map(p => [normalizeKey(p.value), p]));
+
+                let atlasCount = 0;
+                let emptyCount = 0;
+                let unusedCount = 0;
+                let otherCount = 0;
+
+                const counts = new Map();
+                programList.forEach(p => counts.set(normalizeKey(p.value), 0));
+
+                shops.forEach(s => {
+                    const prog = String(s.program || '').trim();
+                    const isEmpty = !prog;
+                    if (s.kullanilmiyor) {
+                        unusedCount++;
+                        return;
+                    }
+                    if (isEmpty) {
+                        emptyCount++;
+                        return;
+                    }
+                    if (prog === 'atlas') {
+                        atlasCount++;
+                        return;
+                    }
+                    if (prog === 'diger') {
+                        otherCount++;
+                        return;
+                    }
+                    const key = normalizeKey(prog);
+                    if (known.has(key)) {
+                        counts.set(key, (counts.get(key) || 0) + 1);
+                        return;
+                    }
+                    otherCount++;
+                });
+
+                const container = document.getElementById('programStatsContainer');
+                if (!container) return;
+                container.style.display = 'contents';
+                container.innerHTML = '';
+
+                const mkCard = (title, value, color) => {
+                    const el = document.createElement('div');
+                    el.className = 'stat-card';
+                    if (color) {
+                        el.style.borderColor = `${color}55`;
+                    }
+                    el.innerHTML = `
+                        <div class="t">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                        <div class="v">${value}</div>
+                    `;
+                    return el;
+                };
+
+                container.appendChild(mkCard('Atlas', atlasCount, '#10b981'));
+                programList.forEach(p => {
+                    if (String(p?.value || '').trim() === 'diger') return;
+                    const key = normalizeKey(p.value);
+                    const c = counts.get(key) || 0;
+                    container.appendChild(mkCard(p.label || '-', c, String(p.color || '').trim() || '#ef4444'));
+                });
+                container.appendChild(mkCard('Diğer', otherCount, '#ef4444'));
+                container.appendChild(mkCard('Kullanılmıyor', unusedCount, '#fbbf24'));
+
+                try {
+                    if (typeof window.__updateMobileListLayout === 'function') {
+                        requestAnimationFrame(() => window.__updateMobileListLayout());
+                    }
+                } catch (e) {}
+            } catch (e) {
+                console.error('updateStats error', e);
+            }
         }
 
         if ('serviceWorker' in navigator) {
@@ -787,6 +1022,14 @@
         .shop-item.diger {
             border-left-color: #ef4444;
         }
+
+        .shop-item.kullanilmiyor {
+            border-left-color: #fbbf24;
+        }
+
+        .shop-item.empty {
+            border-left-color: #fbbf24;
+        }
         
         .dashboard {
             position: fixed;
@@ -804,29 +1047,18 @@
 
         .stats-cards {
             display: flex;
+            flex-wrap: wrap;
             gap: 12px;
-            overflow-x: auto;
+            overflow-x: visible;
             padding-bottom: 6px;
-            scroll-snap-type: x mandatory;
-        }
-
-        .stats-cards::-webkit-scrollbar {
-            height: 6px;
-        }
-
-        .stats-cards::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 99px;
         }
 
         .stat-card {
-            min-width: 170px;
-            flex: 0 0 auto;
-            background: rgba(255, 255, 255, 0.06);
+            flex: 1 1 160px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 16px;
-            padding: 12px;
-            scroll-snap-align: start;
         }
 
         .stat-card .t {
@@ -1147,7 +1379,7 @@
 
             body.tab-list .sidebar {
                 transform: none;
-                top: calc(56px + 190px);
+                top: calc(56px + var(--mobileDashboardH, 190px));
                 bottom: 72px;
                 height: auto;
                 border-radius: 0;
@@ -1158,7 +1390,7 @@
                 top: 56px;
                 left: 0;
                 right: 0;
-                height: 190px;
+                height: auto;
                 bottom: auto;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
                 z-index: 2300;
@@ -1169,17 +1401,62 @@
             width: 44px;
             height: 44px;
             line-height: 44px;
-            font-size: 20px;
         }
 
-        .leaflet-touch .leaflet-control-zoom a {
-            width: 48px;
-            height: 48px;
-            line-height: 48px;
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(10px);
+        }
+
+        .loading-card {
+            padding: 18px 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            width: min(92vw, 360px);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            border: 4px solid rgba(255, 255, 255, 0.18);
+            border-top-color: rgba(59, 130, 246, 0.95);
+            margin: 4px auto 12px;
+            animation: spin 0.9s linear infinite;
+        }
+
+        .loading-title {
+            font-weight: 900;
+            color: rgba(226, 232, 240, 0.95);
+            margin-bottom: 4px;
+        }
+
+        .loading-subtitle {
+            font-size: 13px;
+            color: rgba(226, 232, 240, 0.7);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
+    <div id="appLoading" class="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <div class="loading-title">Yükleniyor...</div>
+            <div class="loading-subtitle">Veriler hazırlanıyor</div>
+        </div>
+    </div>
     <!-- Navbar -->
     <nav class="navbar">
         <div class="flex items-center gap-4">
@@ -1272,18 +1549,7 @@
                 <div class="t">Toplam</div>
                 <div id="totalShops" class="v">0</div>
             </div>
-            <div class="stat-card atlas">
-                <div class="t">Atlas</div>
-                <div id="atlasCount" class="v">0</div>
-            </div>
-            <div class="stat-card diger">
-                <div class="t">Diğer</div>
-                <div id="digerCount" class="v">0</div>
-            </div>
-            <div class="stat-card completed">
-                <div class="t">Bilgisi Tamamlanan</div>
-                <div id="completedCount" class="v">0</div>
-            </div>
+            <div id="programStatsContainer" style="display: contents;"></div>
         </div>
     </div>
 
@@ -1312,6 +1578,7 @@
             const mapBtn = document.getElementById('tabMapBtn');
             const listBtn = document.getElementById('tabListBtn');
             const adminBtn = document.getElementById('tabAdminBtn');
+            const dashboard = document.querySelector('.dashboard');
 
             const isMobileNow = () => window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
 
@@ -1343,9 +1610,22 @@
                     if (adminBtn) adminBtn.classList.remove('active');
                     closeSidebar();
                 }
+
+                window.__updateMobileListLayout?.();
+
                 setTimeout(() => {
                     try { window.appMap && window.appMap.invalidateSize(); } catch (e) {}
                 }, 50);
+            };
+
+            window.__updateMobileListLayout = () => {
+                try {
+                    if (!isMobileNow()) return;
+                    if (!document.body.classList.contains('tab-list')) return;
+                    if (!dashboard) return;
+                    const h = Math.max(160, Math.min(320, dashboard.offsetHeight || 190));
+                    document.documentElement.style.setProperty('--mobileDashboardH', `${h}px`);
+                } catch (e) {}
             };
 
             const handleAdmin = () => {
@@ -1383,6 +1663,8 @@
                     document.body.classList.remove('tab-map', 'tab-list');
                     closeSidebar();
                 }
+
+                window.__updateMobileListLayout?.();
             };
 
             window.addEventListener('resize', sync);

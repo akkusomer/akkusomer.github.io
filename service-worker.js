@@ -1,4 +1,4 @@
-const CACHE_NAME = 'antalyahal-v1';
+const CACHE_NAME = 'antalyahal-v3';
 const CORE_ASSETS = [
   './',
   './index.html',

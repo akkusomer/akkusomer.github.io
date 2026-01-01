@@ -25,7 +25,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, getDocs, query, where, writeBatch, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, getDocs, getDoc, query, where, writeBatch, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         
         // Firebase yapılandırması
@@ -43,7 +43,23 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
+        let __loadingEl = null;
+        let __loadingProgramsReady = false;
+        let __loadingShopsReady = false;
+        const __setLoading = (on) => {
+            if (!__loadingEl) return;
+            __loadingEl.style.display = on ? 'flex' : 'none';
+        };
+        const __maybeFinishLoading = () => {
+            if (__loadingProgramsReady && __loadingShopsReady) {
+                __setLoading(false);
+            }
+        };
+
         window.addEventListener('DOMContentLoaded', () => {
+            __loadingEl = document.getElementById('appLoading');
+            __setLoading(false);
+
             const adminApp = document.getElementById('adminApp');
             const loginScreen = document.getElementById('loginScreen');
             const loginForm = document.getElementById('loginForm');
@@ -52,28 +68,50 @@
             const loginError = document.getElementById('loginError');
             const logoutBtn = document.getElementById('logoutBtn');
             const mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
+            const desktopSettingsBtn = document.getElementById('desktopSettingsBtn');
 
             const getMapSafe = () => window.adminMap;
 
             const mapTabBtn = document.getElementById('adminTabMapBtn');
             const listTabBtn = document.getElementById('adminTabListBtn');
+            const settingsTabBtn = document.getElementById('adminTabSettingsBtn');
             const actionBlockBtn = document.getElementById('adminActionBlockBtn');
             const actionAddBtn = document.getElementById('adminActionAddBtn');
-            const tableContainer = document.querySelector('.table-container');
+            const tableContainer = document.getElementById('shopTableContainer');
+            const settingsPanel = document.getElementById('settingsPanel');
 
             const isMobileNow = () => window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
 
             window.setAdminTab = (tab) => {
-                if (!isMobileNow()) return;
-                document.body.classList.remove('admin-tab-map', 'admin-tab-list');
-                if (tab === 'list') {
-                    document.body.classList.add('admin-tab-list');
-                    if (mapTabBtn) mapTabBtn.classList.remove('active');
-                    if (listTabBtn) listTabBtn.classList.add('active');
+                const isMobile = isMobileNow();
+
+                if (isMobile) {
+                    document.body.classList.remove('admin-tab-map', 'admin-tab-list', 'admin-tab-settings');
+                    if (tab === 'settings') {
+                        document.body.classList.add('admin-tab-settings');
+                        if (mapTabBtn) mapTabBtn.classList.remove('active');
+                        if (listTabBtn) listTabBtn.classList.remove('active');
+                        if (settingsTabBtn) settingsTabBtn.classList.add('active');
+                    } else if (tab === 'list') {
+                        document.body.classList.add('admin-tab-list');
+                        if (mapTabBtn) mapTabBtn.classList.remove('active');
+                        if (listTabBtn) listTabBtn.classList.add('active');
+                        if (settingsTabBtn) settingsTabBtn.classList.remove('active');
+                    } else {
+                        document.body.classList.add('admin-tab-map');
+                        if (mapTabBtn) mapTabBtn.classList.add('active');
+                        if (listTabBtn) listTabBtn.classList.remove('active');
+                        if (settingsTabBtn) settingsTabBtn.classList.remove('active');
+                    }
                 } else {
-                    document.body.classList.add('admin-tab-map');
-                    if (mapTabBtn) mapTabBtn.classList.add('active');
-                    if (listTabBtn) listTabBtn.classList.remove('active');
+                    const mapEl = document.getElementById('map');
+                    if (mapEl) mapEl.style.display = (tab === 'map') ? 'block' : 'none';
+                    if (tableContainer) tableContainer.style.display = (tab === 'list') ? 'block' : 'none';
+                    if (settingsPanel) settingsPanel.style.display = (tab === 'settings') ? 'block' : 'none';
+
+                    if (mapTabBtn) mapTabBtn.classList.toggle('active', tab === 'map');
+                    if (listTabBtn) listTabBtn.classList.toggle('active', tab === 'list');
+                    if (settingsTabBtn) settingsTabBtn.classList.toggle('active', tab === 'settings');
                 }
 
                 setTimeout(() => {
@@ -111,11 +149,15 @@
             onAuthStateChanged(auth, (user) => {
                 window.isAdminAuthed = !!user;
                 if (user) {
+                    __loadingProgramsReady = false;
+                    __loadingShopsReady = false;
+                    __setLoading(true);
                     showAdmin();
                     if (isMobileNow()) {
                         window.setAdminTab('map');
                     }
                 } else {
+                    __setLoading(false);
                     showLogin('');
                 }
             });
@@ -165,6 +207,26 @@
 
             if (mapTabBtn) mapTabBtn.addEventListener('click', () => window.setAdminTab('map'));
             if (listTabBtn) listTabBtn.addEventListener('click', () => window.setAdminTab('list'));
+            if (settingsTabBtn) settingsTabBtn.addEventListener('click', () => window.setAdminTab('settings'));
+
+            if (desktopSettingsBtn) desktopSettingsBtn.addEventListener('click', () => window.setAdminTab('settings'));
+
+            const goProgramSettingsBtn = document.getElementById('goProgramSettingsBtn');
+            if (goProgramSettingsBtn) {
+                goProgramSettingsBtn.addEventListener('click', () => {
+                    const programEl = document.getElementById('programSettingsSection');
+                    const blockEl = document.getElementById('blockListPanel');
+                    const homeEl = document.getElementById('settingsHome');
+
+                    if (programEl) programEl.style.display = 'block';
+                    if (blockEl) blockEl.style.display = 'none';
+                    if (homeEl) homeEl.style.display = 'none';
+
+                    if (programEl && typeof programEl.scrollIntoView === 'function') {
+                        programEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            }
 
             if (actionBlockBtn) {
                 actionBlockBtn.addEventListener('click', () => {
@@ -173,25 +235,402 @@
                 });
             }
 
-            if (actionAddBtn) {
-                actionAddBtn.addEventListener('click', () => {
-                    const btn = document.getElementById('addShopBtn');
-                    if (btn) btn.click();
-                });
-            }
-
             const syncMobileAdminUi = () => {
                 if (!isMobileNow()) {
-                    document.body.classList.remove('admin-tab-map', 'admin-tab-list');
+                    document.body.classList.remove('admin-tab-map', 'admin-tab-list', 'admin-tab-settings');
                     return;
                 }
-                if (!document.body.classList.contains('admin-tab-map') && !document.body.classList.contains('admin-tab-list')) {
+                if (!document.body.classList.contains('admin-tab-map') && !document.body.classList.contains('admin-tab-list') && !document.body.classList.contains('admin-tab-settings')) {
                     document.body.classList.add('admin-tab-map');
                 }
             };
 
             window.addEventListener('resize', syncMobileAdminUi);
             syncMobileAdminUi();
+
+            // Program Ayarları (Firestore)
+            const settingsRef = doc(db, 'ayarlar', 'programlar');
+
+            function normalizePrograms(rawList) {
+                const list = Array.isArray(rawList) ? rawList : [];
+                const cleaned = list
+                    .map(p => ({
+                        value: String(p?.value || '').trim(),
+                        label: String(p?.label || '').trim(),
+                        color: String(p?.color || '').trim()
+                    }))
+                    .filter(p => !!p.value && !!p.label)
+                    .filter(p => p.value !== 'atlas');
+
+                const uniq = new Map();
+                cleaned.forEach(p => {
+                    if (!uniq.has(p.value)) {
+                        uniq.set(p.value, {
+                            value: p.value,
+                            label: p.label,
+                            color: p.color || '#ef4444'
+                        });
+                    }
+                });
+
+                if (!uniq.has('diger')) {
+                    uniq.set('diger', { value: 'diger', label: 'Diğer', color: '#ef4444' });
+                }
+
+                return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label, 'tr'));
+            }
+
+            function getProgramByValue(value) {
+                const vRaw = String(value || '').trim();
+                if (!vRaw) return null;
+                const vLower = vRaw.toLowerCase();
+                const normalizeKey = (s) => String(s || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[\s\-_]+/g, '');
+                const vKey = normalizeKey(vRaw);
+
+                const list = Array.isArray(window.programSettings) ? window.programSettings : [];
+                return (
+                    list.find(p => String(p.value || '').trim() === vRaw) ||
+                    list.find(p => String(p.value || '').trim().toLowerCase() === vLower) ||
+                    list.find(p => String(p.label || '').trim().toLowerCase() === vLower) ||
+                    list.find(p => normalizeKey(p.value) === vKey) ||
+                    list.find(p => normalizeKey(p.label) === vKey)
+                ) || null;
+            }
+
+            function programLabel(value) {
+                if (value === 'atlas') return 'Atlas';
+                const found = getProgramByValue(value);
+                return found ? found.label : '-';
+            }
+
+            function programColor(shopLike) {
+                const program = String(shopLike?.program || '').trim();
+                const isEmpty = !program;
+                if (shopLike?.kullanilmiyor || isEmpty) return '#fbbf24';
+                if (program === 'atlas') return '#10b981';
+                const found = getProgramByValue(program);
+                return found?.color || '#ef4444';
+            }
+
+            window.programLabel = programLabel;
+            window.programColor = programColor;
+
+            function fillProgramSelect(selectEl, selectedValue = '') {
+                if (!selectEl) return;
+                const current = (selectedValue || selectEl.value || '').trim();
+                selectEl.innerHTML = '';
+
+                const optEmpty = document.createElement('option');
+                optEmpty.value = '';
+                optEmpty.textContent = 'Program Seçin (opsiyonel)';
+                selectEl.appendChild(optEmpty);
+
+                const optAtlas = document.createElement('option');
+                optAtlas.value = 'atlas';
+                optAtlas.textContent = 'Atlas';
+                selectEl.appendChild(optAtlas);
+
+                const list = Array.isArray(window.programSettings) ? window.programSettings : [];
+                list.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.value;
+                    opt.textContent = p.label;
+                    selectEl.appendChild(opt);
+                });
+
+                selectEl.value = current;
+            }
+
+            function syncProgramUis() {
+                const shopProgram = document.getElementById('shopProgram');
+                const detailShopProgram = document.getElementById('detailShopProgram');
+                fillProgramSelect(shopProgram);
+                fillProgramSelect(detailShopProgram);
+            }
+
+            function renderProgramList() {
+                const listEl = document.getElementById('programList');
+                if (!listEl) return;
+                const programs = Array.isArray(window.programSettings) ? window.programSettings : [];
+                listEl.innerHTML = '';
+
+                const atlasRow = document.createElement('div');
+                atlasRow.className = 'flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-900/40 border border-slate-700';
+                atlasRow.innerHTML = `
+                    <div>
+                        <div class="font-semibold text-gray-200">Atlas</div>
+                        <div class="text-xs text-gray-500">Sabit</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded border" style="background:#10b981;border-color:rgba(255,255,255,0.2);"></div>
+                        <button type="button" class="btn btn-secondary" disabled>Silinemez</button>
+                    </div>
+                `;
+                listEl.appendChild(atlasRow);
+
+                const diger = programs.find(p => String(p?.value || '').trim() === 'diger');
+                if (diger) {
+                    const digerRow = document.createElement('div');
+                    digerRow.className = 'flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-900/40 border border-slate-700';
+                    digerRow.innerHTML = `
+                        <div>
+                            <div class="font-semibold text-gray-200">Diğer</div>
+                            <div class="text-xs text-gray-500">Sabit</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded border" style="background:${String(diger.color || '#ef4444').trim() || '#ef4444'};border-color:rgba(255,255,255,0.2);"></div>
+                            <button type="button" class="btn btn-secondary" disabled>Silinemez</button>
+                        </div>
+                    `;
+                    listEl.appendChild(digerRow);
+                }
+
+                programs.forEach(p => {
+                    const val = String(p?.value || '').trim();
+                    if (!val || val === 'atlas' || val === 'diger') return;
+                    const row = document.createElement('div');
+                    row.className = 'p-3 rounded-lg bg-slate-900/40 border border-slate-700';
+                    row.innerHTML = `
+                        <div class="flex items-center justify-between gap-3" data-program-row="${val}">
+                            <div style="min-width:0;">
+                                <div class="font-semibold text-gray-200">${String(p.label || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                                <div class="text-xs text-gray-500">Kod: ${val.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded border" style="background:${String(p.color || '#ef4444').trim() || '#ef4444'};border-color:rgba(255,255,255,0.2);"></div>
+                                <button type="button" class="btn btn-secondary" data-program-edit="${val}">Düzenle</button>
+                                <button type="button" class="btn btn-danger" data-program-delete="${val}">Sil</button>
+                            </div>
+                        </div>
+
+                        <div data-program-editor="${val}" style="display:none; margin-top: 10px;">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <input
+                                    data-program-label="${val}"
+                                    type="text"
+                                    class="form-input"
+                                    value="${String(p.label || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"
+                                    placeholder="Program Adı"
+                                />
+                                <input
+                                    type="text"
+                                    class="form-input"
+                                    value="${val.replace(/</g, '&lt;').replace(/>/g, '&gt;')}"
+                                    placeholder="Program Kodu"
+                                    readonly
+                                />
+                            </div>
+                            <div class="flex items-center justify-between gap-3 mt-2">
+                                <div class="text-xs text-gray-500">Kod değiştirilemez (dükkan kayıtları bu koda bağlı).</div>
+                                <div class="flex items-center gap-2">
+                                    <input data-program-color="${val}" type="color" value="${String(p.color || '#ef4444').trim() || '#ef4444'}" class="h-8 w-10 bg-transparent" />
+                                    <button type="button" class="btn btn-primary" data-program-save="${val}">Kaydet</button>
+                                    <button type="button" class="btn btn-secondary" data-program-cancel="${val}">Vazgeç</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    listEl.appendChild(row);
+
+                    const labelEl = row.querySelector(`[data-program-editor="${CSS.escape(val)}"] [data-program-label="${CSS.escape(val)}"]`);
+                    const colorEl = row.querySelector(`[data-program-editor="${CSS.escape(val)}"] [data-program-color="${CSS.escape(val)}"]`);
+                    if (labelEl) labelEl.dataset.origValue = String(labelEl.value || '');
+                    if (colorEl) colorEl.dataset.origValue = String(colorEl.value || '');
+                });
+
+                // Düzenle / Vazgeç handler
+                listEl.querySelectorAll('[data-program-edit]')?.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const val = btn.getAttribute('data-program-edit') || '';
+                        const wrap = btn.closest('[data-program-row]')?.parentElement;
+                        const editor = wrap?.querySelector(`[data-program-editor="${CSS.escape(val)}"]`);
+                        if (editor) editor.style.display = '';
+                    });
+                });
+
+                listEl.querySelectorAll('[data-program-cancel]')?.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const val = btn.getAttribute('data-program-cancel') || '';
+                        const editor = btn.closest(`[data-program-editor="${CSS.escape(val)}"]`);
+                        const labelEl = editor?.querySelector(`[data-program-label="${CSS.escape(val)}"]`);
+                        const colorEl = editor?.querySelector(`[data-program-color="${CSS.escape(val)}"]`);
+
+                        if (labelEl) {
+                            labelEl.value = String(labelEl.dataset.origValue || '');
+                        }
+                        if (colorEl) {
+                            colorEl.value = String(colorEl.dataset.origValue || '#ef4444');
+                        }
+
+                        if (editor) editor.style.display = 'none';
+                    });
+                });
+
+                // Kaydet handler (label + color)
+                listEl.querySelectorAll('[data-program-save]')?.forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const val = btn.getAttribute('data-program-save') || '';
+                        if (!val || val === 'atlas' || val === 'diger') return;
+                        const editor = btn.closest(`[data-program-editor="${CSS.escape(val)}"]`);
+                        const labelEl = editor?.querySelector(`[data-program-label="${CSS.escape(val)}"]`);
+                        const colorEl = editor?.querySelector(`[data-program-color="${CSS.escape(val)}"]`);
+                        const nextLabel = String(labelEl?.value || '').trim();
+                        const nextColor = String(colorEl?.value || '').trim() || '#ef4444';
+
+                        if (!nextLabel) {
+                            showToast('Program adı boş olamaz.', 'error');
+                            return;
+                        }
+
+                        try {
+                            const next = (Array.isArray(window.programSettings) ? window.programSettings : []).map(p => {
+                                if (p.value !== val) return p;
+                                return { ...p, label: nextLabel, color: nextColor };
+                            });
+                            await setDoc(settingsRef, { programlar: next }, { merge: true });
+                            showToast('Program güncellendi.', 'success');
+
+                            if (labelEl) {
+                                labelEl.dataset.origValue = String(labelEl.value || '');
+                            }
+                            if (colorEl) {
+                                colorEl.dataset.origValue = String(colorEl.value || '');
+                            }
+
+                            if (editor) editor.style.display = 'none';
+                        } catch (e) {
+                            console.error('program update error', e);
+                            showToast('Program güncellenemedi! Firestore izinlerini kontrol edin.', 'error');
+                        }
+                    });
+                });
+
+                // Silme handler
+                listEl.querySelectorAll('[data-program-delete]')?.forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const val = btn.getAttribute('data-program-delete') || '';
+                        if (!val) return;
+                        if (val === 'atlas') return;
+                        if (val === 'diger') return;
+
+                        const normalizeKey = (s) => String(s || '')
+                            .trim()
+                            .toLowerCase()
+                            .replace(/[\s\-_]+/g, '');
+
+                        try {
+                            const usedCount = Object.values(shopsData || {}).filter(s => {
+                                if (!s || s.kullanilmiyor) return false;
+                                const prog = String(s.program || '').trim();
+                                if (!prog || prog === 'atlas') return false;
+                                if (prog === val) return true;
+                                const found = (typeof getProgramByValue === 'function') ? getProgramByValue(prog) : null;
+                                if (found && String(found.value || '').trim() === val) return true;
+                                return normalizeKey(prog) === normalizeKey(val);
+                            }).length;
+
+                            if (usedCount > 0) {
+                                showToast(`Bu program ${usedCount} dükkânda seçili. Önce dükkânların programını değiştirin.`, 'error');
+                                return;
+                            }
+                        } catch (e) {}
+
+                        if (!confirm(`"${val}" programını silmek istiyor musun?`)) return;
+                        try {
+                            const next = (Array.isArray(window.programSettings) ? window.programSettings : []).filter(p => p.value !== val);
+                            await setDoc(settingsRef, { programlar: next }, { merge: true });
+                            showToast('Program silindi.', 'success');
+                        } catch (e) {
+                            console.error('program delete error', e);
+                            showToast('Program silinemedi! Firestore izinlerini kontrol edin.', 'error');
+                        }
+                    });
+                });
+            }
+
+            async function ensureSettingsDefaults() {
+                try {
+                    const snap = await getDoc(settingsRef);
+                    if (!snap.exists()) {
+                        await setDoc(settingsRef, { programlar: normalizePrograms([]) }, { merge: true });
+                        return;
+                    }
+                    const data = snap.data() || {};
+                    if (!Array.isArray(data.programlar)) {
+                        await setDoc(settingsRef, { programlar: normalizePrograms(data.programlar) }, { merge: true });
+                    }
+                } catch (e) {
+                    console.warn('ensureSettingsDefaults failed', e);
+                }
+            }
+
+            ensureSettingsDefaults();
+
+            onSnapshot(settingsRef, (snap) => {
+                const data = snap.exists() ? snap.data() : {};
+                const normalized = normalizePrograms(data?.programlar);
+                window.programSettings = normalized;
+                syncProgramUis();
+                renderProgramList();
+
+                __loadingProgramsReady = true;
+                __maybeFinishLoading();
+
+                // Mevcut dükkan katmanlarını yeni renklere göre tazele
+                try {
+                    Object.values(shopsData || {}).forEach(s => {
+                        if (s && s.id) upsertShopLayers(s);
+                    });
+                } catch (e) {}
+
+                // Programlar güncellenince liste + istatistikleri yeniden bas
+                try {
+                    const currentShops = Object.values(shopsData || {});
+                    if (typeof updateTable === 'function') updateTable(currentShops);
+                } catch (e) {}
+            });
+
+            const addProgramBtn = document.getElementById('addProgramBtn');
+            if (addProgramBtn) {
+                addProgramBtn.addEventListener('click', async () => {
+                    const labelEl = document.getElementById('newProgramLabel');
+                    const valueEl = document.getElementById('newProgramValue');
+                    const colorEl = document.getElementById('newProgramColor');
+                    const label = String(labelEl?.value || '').trim();
+                    const value = String(valueEl?.value || '').trim();
+                    const color = String(colorEl?.value || '').trim() || '#ef4444';
+
+                    if (!label || !value) {
+                        alert('Program adı ve kodu zorunludur.');
+                        return;
+                    }
+                    if (value === 'atlas') {
+                        alert('Atlas sabittir.');
+                        return;
+                    }
+
+                    const current = Array.isArray(window.programSettings) ? window.programSettings : [];
+                    if (current.some(p => p.value === value)) {
+                        alert('Bu program kodu zaten var.');
+                        return;
+                    }
+
+                    try {
+                        const next = normalizePrograms([...current, { label, value, color }]);
+                        await setDoc(settingsRef, { programlar: next }, { merge: true });
+                        showToast('Program eklendi.', 'success');
+                    } catch (e) {
+                        console.error('program add error', e);
+                        showToast('Program kaydedilemedi! Firestore izinlerini kontrol edin.', 'error');
+                    }
+
+                    if (labelEl) labelEl.value = '';
+                    if (valueEl) valueEl.value = '';
+                });
+            }
         });
         
         // Koordinatlar (Harita sınırları)
@@ -223,8 +662,8 @@
         // Haritayı oluştur
         const map = L.map('map', {
             center: [centerLat, centerLng],
-            zoom: 18,
-            minZoom: 17,
+            zoom: 16,
+            minZoom: 15,
             maxZoom: 22,
             preferCanvas: true,
             renderer: L.canvas({ padding: 0.5 }),
@@ -264,7 +703,8 @@
         // Haritayı belirtilen alana otomatik hizala
         const polygonBounds = L.polygon(coordinates).getBounds();
         map.fitBounds(polygonBounds, {
-            padding: [20, 20]
+            padding: [20, 20],
+            maxZoom: 17
         });
 
         const LABEL_MIN_ZOOM = 19;
@@ -421,9 +861,16 @@
                 iconAnchor: [14, 14]
             });
         };
-        
-        const greenIcon = createMarkerIcon('#10b981'); // Atlas - Yeşil
-        const redIcon = createMarkerIcon('#ef4444');   // Diğer - Kırmızı
+
+        const markerIconCache = {};
+        function getMarkerIconByColor(color) {
+            const c = String(color || '').trim() || '#ef4444';
+            if (!markerIconCache[c]) markerIconCache[c] = createMarkerIcon(c);
+            return markerIconCache[c];
+        }
+
+        const greenIcon = getMarkerIconByColor('#10b981'); // Atlas - Yeşil
+        const yellowIcon = getMarkerIconByColor('#fbbf24'); // Kullanılmayan/Boş - Sarı
         
         // Alan Bölme Özellikleri
         let areaDivisionMode = false;
@@ -601,11 +1048,12 @@
                 name: document.getElementById('shopName').value.trim(),
                 no: document.getElementById('shopNo').value.trim(),
                 program: document.getElementById('shopProgram').value,
+                kullanilmiyor: !!document.getElementById('shopKullanilmiyor')?.checked,
                 vergiNo: document.getElementById('shopVergiNo')?.value.trim() || '',
                 telefon: document.getElementById('shopTelefon')?.value.trim() || ''
             };
             
-            if (!shopData.name || !shopData.no || !shopData.program) {
+            if (!shopData.name || !shopData.no) {
                 showToast('Lütfen tüm alanları doldurun!', 'error');
                 return;
             }
@@ -680,6 +1128,8 @@
             document.getElementById('shopName').value = shopData.name || '';
             document.getElementById('shopNo').value = shopData.no || '';
             document.getElementById('shopProgram').value = shopData.program || '';
+            const unusedCb = document.getElementById('shopKullanilmiyor');
+            if (unusedCb) unusedCb.checked = !!shopData.kullanilmiyor;
             const vergiNoInput = document.getElementById('shopVergiNo');
             const telefonInput = document.getElementById('shopTelefon');
             if (vergiNoInput) vergiNoInput.value = shopData.vergiNo || '';
@@ -713,36 +1163,146 @@
             document.getElementById('submitBtn').textContent = originalSubmitText;
         });
 
-        // Dükkan Ekle butonu (tek tıkla konum seç, sonra form aç)
-        const addShopBtn = document.getElementById('addShopBtn');
-        if (addShopBtn) {
-            addShopBtn.addEventListener('click', () => {
-                if (areaDivisionMode) {
-                    showToast('Blok oluşturma modu aktifken dükkan ekleme kapalıdır.', 'error');
-                    return;
-                }
-                addShopMode = true;
-                showToast('Dükkan eklemek için haritaya bir kez tıklayın.', 'success');
-            });
-        }
+        addShopMode = false;
         
         // Firestore'dan verileri anlık çek ve haritaya ekle
         const dukkanlarRef = collection(db, 'dukkanlar');
         const dukkanlarQuery = query(dukkanlarRef, orderBy('no'));
-        
+
+        function removeShopLayers(shopId) {
+            if (markers[shopId]) {
+                try { map.removeLayer(markers[shopId]); } catch (e) {}
+                delete markers[shopId];
+            }
+            if (shopPolygons[shopId]) {
+                if (shopPolygons[shopId]?.polygon) {
+                    try { map.removeLayer(shopPolygons[shopId].polygon); } catch (e) {}
+                }
+                if (shopPolygons[shopId]?.label) {
+                    try { map.removeLayer(shopPolygons[shopId].label); } catch (e) {}
+                }
+                delete shopPolygons[shopId];
+            }
+        }
+
+        function upsertShopLayers(shop) {
+            removeShopLayers(shop.id);
+
+            const normalizedPolygon = normalizePolygonCoords(shop.polygonCoords);
+            const isEmpty = !String(shop.program || '').trim();
+            const color = (typeof window.programColor === 'function')
+                ? window.programColor(shop)
+                : ((shop.kullanilmiyor || isEmpty) ? '#fbbf24' : (shop.program === 'atlas' ? '#10b981' : '#ef4444'));
+            const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+
+            // Polygon varsa polygon olarak çiz
+            if (normalizedPolygon.length >= 3) {
+                // Merkez (coords) yoksa polygon'dan hesapla
+                let center = shop.coords;
+                if (!center || !Array.isArray(center) || center.length !== 2) {
+                    const lats = normalizedPolygon.map(c => c[0]);
+                    const lngs = normalizedPolygon.map(c => c[1]);
+                    center = [(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2];
+                }
+
+                const polygon = L.polygon(normalizedPolygon, {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.4,
+                    weight: isMobile ? 1 : 2,
+                    className: `shop-polygon ${shop.kullanilmiyor ? 'kullanilmiyor' : (isEmpty ? 'empty' : (shop.program === 'atlas' ? 'atlas' : 'diger'))}`
+                }).addTo(map);
+
+                const label = L.marker(center, {
+                    icon: L.divIcon({
+                        className: 'polygon-label',
+                        html: `<div style="
+                            font-size: 18px;
+                            font-weight: bold;
+                            color: white;
+                            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                            text-align: center;
+                            background: rgba(0,0,0,0.5);
+                            padding: 4px 8px;
+                            border-radius: 4px;
+                        ">${shop.no || ''}</div>`,
+                        iconSize: [60, 30],
+                        iconAnchor: [30, 15]
+                    })
+                });
+
+                if (shouldShowLabels()) {
+                    label.addTo(map);
+                }
+
+                polygon.on('click', () => {
+                    document.getElementById('detailShopName').value = shop.name || '';
+                    document.getElementById('detailShopNo').value = shop.no || '';
+                    document.getElementById('detailShopProgram').value = shop.program || '';
+                    const unusedInput = document.getElementById('detailShopKullanilmiyor');
+                    if (unusedInput) unusedInput.checked = !!shop.kullanilmiyor;
+                    const vergiInput = document.getElementById('detailShopVergiNo');
+                    const telInput = document.getElementById('detailShopTelefon');
+                    if (vergiInput) vergiInput.value = shop.vergiNo || '';
+                    if (telInput) telInput.value = shop.telefon || '';
+
+                    document.getElementById('shopDetailModal').style.display = 'block';
+                    window.currentEditingShopDocId = shop.id;
+                    window.currentEditingShopPolygon = polygon;
+                    window.currentEditingShopLabel = label;
+                    window.currentEditingShopPolygonCoords = normalizedPolygon;
+                    window.currentEditingShopCenter = center;
+                });
+
+                shopPolygons[shop.id] = { polygon, label };
+                return;
+            }
+
+            // Polygon yoksa marker
+            if (!shop.coords || !Array.isArray(shop.coords) || shop.coords.length !== 2) {
+                return;
+            }
+
+            const progColor = (typeof window.programColor === 'function')
+                ? window.programColor(shop)
+                : (isEmpty ? '#fbbf24' : (shop.program === 'atlas' ? '#10b981' : '#ef4444'));
+            const progText = (typeof window.programLabel === 'function') ? window.programLabel(shop.program) : (shop.program || '-');
+            const icon = (shop.kullanilmiyor || isEmpty)
+                ? yellowIcon
+                : (shop.program === 'atlas' ? greenIcon : getMarkerIconByColor(progColor));
+            const marker = L.marker(shop.coords, { icon: icon })
+                .bindPopup(`
+                    <div style="text-align: center; padding: 8px;">
+                        <h3 style="font-weight: bold; margin-bottom: 8px;">${shop.name || 'İsimsiz'}</h3>
+                        <p style="margin: 4px 0;"><strong>Dükkan No:</strong> ${shop.no || '-'}</p>
+                        <p style="margin: 4px 0;">
+                            <strong>Program:</strong>
+                            <span style="color: ${progColor};">
+                                ${progText}
+                            </span>
+                        </p>
+                    </div>
+                `)
+                .addTo(map);
+
+            markers[shop.id] = marker;
+        }
+
         onSnapshot(dukkanlarQuery, (snapshot) => {
-            // Önce tüm marker/polygon/label katmanlarını temizle
-            Object.values(markers).forEach(marker => {
-                map.removeLayer(marker);
+            snapshot.docChanges().forEach((ch) => {
+                const shop = { id: ch.doc.id, ...ch.doc.data() };
+                const normalized = normalizeShopDisplay(shop);
+                if (ch.type === 'removed') {
+                    removeShopLayers(normalized.id);
+                    delete shopsData[normalized.id];
+                    return;
+                }
+                upsertShopLayers(normalized);
+                shopsData[normalized.id] = normalized;
             });
-            Object.keys(markers).forEach(key => delete markers[key]);
-            
-            Object.values(shopPolygons).forEach(obj => {
-                if (obj?.polygon) map.removeLayer(obj.polygon);
-                if (obj?.label) map.removeLayer(obj.label);
-            });
-            Object.keys(shopPolygons).forEach(key => delete shopPolygons[key]);
-            
+
+            scheduleSyncLabelVisibility();
+
             const shopsArray = snapshot.docs
                 .map(d => ({ id: d.id, ...d.data() }))
                 .map(normalizeShopDisplay)
@@ -752,110 +1312,92 @@
                     return aNo - bNo;
                 });
 
-            // Yeni verileri ekle
-            shopsArray.forEach((shop) => {
-                
-                // Polygon varsa polygon olarak çiz
-                const normalizedPolygon = normalizePolygonCoords(shop.polygonCoords);
-                if (normalizedPolygon.length >= 3) {
-                    const color = shop.program === 'atlas' ? '#10b981' : '#ef4444';
-                    
-                    // Merkez (coords) yoksa polygon'dan hesapla
-                    let center = shop.coords;
-                    if (!center || !Array.isArray(center) || center.length !== 2) {
-                        const lats = normalizedPolygon.map(c => c[0]);
-                        const lngs = normalizedPolygon.map(c => c[1]);
-                        center = [(Math.min(...lats) + Math.max(...lats)) / 2, (Math.min(...lngs) + Math.max(...lngs)) / 2];
-                    }
-                    
-                    const polygon = L.polygon(normalizedPolygon, {
-                        color: color,
-                        fillColor: color,
-                        fillOpacity: 0.4,
-                        weight: 2,
-                        className: `shop-polygon ${shop.program === 'atlas' ? 'atlas' : 'diger'}`
-                    }).addTo(map);
-                    
-                    const label = L.marker(center, {
-                        icon: L.divIcon({
-                            className: 'polygon-label',
-                            html: `<div style="
-                                font-size: 18px;
-                                font-weight: bold;
-                                color: white;
-                                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-                                text-align: center;
-                                background: rgba(0,0,0,0.5);
-                                padding: 4px 8px;
-                                border-radius: 4px;
-                            ">${shop.no || ''}</div>`,
-                            iconSize: [60, 30],
-                            iconAnchor: [30, 15]
-                        })
-                    });
-
-                    if (shouldShowLabels()) {
-                        label.addTo(map);
-                    }
-                    
-                    polygon.on('click', () => {
-                        document.getElementById('detailShopName').value = shop.name || '';
-                        document.getElementById('detailShopNo').value = shop.no || '';
-                        document.getElementById('detailShopProgram').value = shop.program || 'diger';
-                        const vergiInput = document.getElementById('detailShopVergiNo');
-                        const telInput = document.getElementById('detailShopTelefon');
-                        if (vergiInput) vergiInput.value = shop.vergiNo || '';
-                        if (telInput) telInput.value = shop.telefon || '';
-                        
-                        document.getElementById('shopDetailModal').style.display = 'block';
-                        window.currentEditingShopDocId = shop.id;
-                        window.currentEditingShopPolygon = polygon;
-                        window.currentEditingShopLabel = label;
-                        window.currentEditingShopPolygonCoords = normalizedPolygon;
-                        window.currentEditingShopCenter = center;
-                    });
-                    
-                    shopPolygons[shop.id] = { polygon, label };
-                    return;
-                }
-                
-                // Polygon yoksa marker
-                if (!shop.coords || !Array.isArray(shop.coords) || shop.coords.length !== 2) {
-                    return;
-                }
-                
-                const icon = shop.program === 'atlas' ? greenIcon : redIcon;
-                const marker = L.marker(shop.coords, { icon: icon })
-                    .bindPopup(`
-                        <div style="text-align: center; padding: 8px;">
-                            <h3 style="font-weight: bold; margin-bottom: 8px;">${shop.name || 'İsimsiz'}</h3>
-                            <p style="margin: 4px 0;"><strong>Dükkan No:</strong> ${shop.no || '-'}</p>
-                            <p style="margin: 4px 0;">
-                                <strong>Program:</strong> 
-                                <span style="color: ${shop.program === 'atlas' ? '#10b981' : '#ef4444'};">
-                                    ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
-                                </span>
-                            </p>
-                        </div>
-                    `)
-                    .addTo(map);
-                
-                markers[shop.id] = marker;
-            });
-
-            scheduleSyncLabelVisibility();
-
-            // Tabloyu güncelle
-            shopsArray.forEach(shop => {
-                shopsData[shop.id] = shop;
-            });
             updateTable(shopsArray);
+
+            __loadingShopsReady = true;
+            __maybeFinishLoading();
         });
         
         // Tablo güncelleme
         function updateTable(shops) {
             const tbody = document.getElementById('shopTableBody');
             tbody.innerHTML = '';
+
+            try {
+                const normalizeKey = (s) => String(s || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[\s\-_]+/g, '');
+
+                const programList = Array.isArray(window.programSettings) ? window.programSettings : [];
+                const known = new Map(programList.map(p => [normalizeKey(p.value), p]));
+
+                let atlasCount = 0;
+                let emptyCount = 0;
+                let unusedCount = 0;
+                let otherCount = 0;
+
+                const counts = new Map();
+                programList.forEach(p => {
+                    if (String(p?.value || '').trim() === 'diger') return;
+                    counts.set(normalizeKey(p.value), 0);
+                });
+
+                shops.forEach(s => {
+                    const prog = String(s.program || '').trim();
+                    const isEmpty = !prog;
+                    if (s.kullanilmiyor) {
+                        unusedCount++;
+                        return;
+                    }
+                    if (isEmpty) {
+                        emptyCount++;
+                        return;
+                    }
+                    if (prog === 'atlas') {
+                        atlasCount++;
+                        return;
+                    }
+                    if (prog === 'diger') {
+                        otherCount++;
+                        return;
+                    }
+                    const key = normalizeKey(prog);
+                    if (known.has(key)) {
+                        counts.set(key, (counts.get(key) || 0) + 1);
+                        return;
+                    }
+                    otherCount++;
+                });
+
+                const statsWrap = document.getElementById('adminStatsContainer');
+                if (statsWrap) {
+                    statsWrap.innerHTML = '';
+                    const mkCard = (title, value, color) => {
+                        const el = document.createElement('div');
+                        el.className = 'stat-card';
+                        if (color) el.style.borderColor = `${color}55`;
+                        el.innerHTML = `
+                            <div class="t">${String(title || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                            <div class="v">${value}</div>
+                        `;
+                        return el;
+                    };
+
+                    statsWrap.appendChild(mkCard('Toplam', shops.length, '#60a5fa'));
+                    statsWrap.appendChild(mkCard('Atlas', atlasCount, '#10b981'));
+                    programList.forEach(p => {
+                        if (String(p?.value || '').trim() === 'diger') return;
+                        const key = normalizeKey(p.value);
+                        const c = counts.get(key) || 0;
+                        statsWrap.appendChild(mkCard(p.label || '-', c, String(p.color || '').trim() || '#ef4444'));
+                    });
+                    statsWrap.appendChild(mkCard('Diğer', otherCount, '#ef4444'));
+                    statsWrap.appendChild(mkCard('Kullanılmıyor', unusedCount, '#fbbf24'));
+                }
+            } catch (e) {
+                console.error('admin updateTable stats error', e);
+            }
             
             if (shops.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">Henüz dükkan eklenmemiş</td></tr>';
@@ -871,33 +1413,51 @@
             sorted.forEach(shop => {
                 const row = document.createElement('tr');
                 row.className = 'border-b border-gray-700 hover:bg-gray-800';
+
+                const isEmptyProgram = !String(shop.program || '').trim();
+                const badgeClass = shop.kullanilmiyor || isEmptyProgram
+                    ? 'bg-yellow-900/30 text-yellow-300'
+                    : (shop.program === 'atlas'
+                        ? 'bg-green-900/30 text-green-400'
+                        : '');
+                const badgeText = shop.kullanilmiyor
+                    ? 'Kullanılmıyor'
+                    : (isEmptyProgram
+                        ? 'Program Yok'
+                        : (typeof window.programLabel === 'function' ? window.programLabel(shop.program) : String(shop.program)));
+
+                const progHex = (!shop.kullanilmiyor && !isEmptyProgram && shop.program !== 'atlas' && typeof window.programColor === 'function')
+                    ? window.programColor(shop)
+                    : '';
+                const badgeStyle = progHex
+                    ? `border:1px solid ${progHex}; color:${progHex}; background:${progHex}22;`
+                    : '';
+
                 row.innerHTML = `
-                    <td class="px-6 py-4 text-gray-200">${(shop.name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                    <td class="px-6 py-4 text-gray-300">${(shop.no || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
                     <td class="px-6 py-4">
-                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${
-                            shop.program === 'atlas' 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : 'bg-red-900/30 text-red-400'
-                        }">
-                            ${shop.program === 'atlas' ? 'Atlas' : 'Diğer'}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="flex gap-2 justify-end">
+                        <div class="flex gap-2 justify-start">
                             <button 
                                 onclick="editShop('${shop.id}')" 
                                 class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition"
                             >
                                 Düzenle
                             </button>
-                            <button 
-                                onclick="deleteShop('${shop.id}')" 
-                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition"
-                            >
-                                SİL
-                            </button>
                         </div>
+                    </td>
+                    <td class="px-6 py-4 text-gray-200">${(shop.name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                    <td class="px-6 py-4 text-gray-300">${(shop.no || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                    <td class="px-6 py-4">
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}" style="${badgeStyle}">
+                            ${badgeText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <button 
+                            onclick="deleteShop('${shop.id}')" 
+                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition"
+                        >
+                            SİL
+                        </button>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -1148,7 +1708,7 @@
                     const existingShop = divisionShopData[shopNo];
                     document.getElementById('detailShopName').value = existingShop?.name || `Dükkan ${shopNo}`;
                     document.getElementById('detailShopNo').value = existingShop?.no || shopNo.toString();
-                    document.getElementById('detailShopProgram').value = existingShop?.program || 'diger';
+                    document.getElementById('detailShopProgram').value = existingShop?.program || '';
                     const vergiInput = document.getElementById('detailShopVergiNo');
                     const telInput = document.getElementById('detailShopTelefon');
                     if (vergiInput) vergiInput.value = existingShop?.vergiNo || '';
@@ -1166,7 +1726,8 @@
                 const shopData = {
                     name: `Dükkan ${shopNo}`,
                     no: shopNo,
-                    program: 'diger',
+                    program: '',
+                    kullanilmiyor: false,
                     telefon: '',
                     vergiNo: '',
                     coords: shop.center,
@@ -1267,6 +1828,7 @@
                 name: document.getElementById('detailShopName').value.trim(),
                 no: document.getElementById('detailShopNo').value.trim(),
                 program: document.getElementById('detailShopProgram').value,
+                kullanilmiyor: !!document.getElementById('detailShopKullanilmiyor')?.checked,
                 vergiNo: document.getElementById('detailShopVergiNo')?.value.trim() || '',
                 telefon: document.getElementById('detailShopTelefon')?.value.trim() || '',
                 coords: center,
@@ -1274,7 +1836,9 @@
             };
             
             // Polygon rengini güncelle
-            const color = shopData.program === 'atlas' ? '#10b981' : '#ef4444';
+            const color = (typeof window.programColor === 'function')
+                ? window.programColor(shopData)
+                : (shopData.kullanilmiyor ? '#fbbf24' : (shopData.program === 'atlas' ? '#10b981' : '#ef4444'));
             shopPolygon.setStyle({
                 color: color,
                 fillColor: color,
@@ -1288,6 +1852,11 @@
                 } else {
                     const docRef = await addDoc(collection(db, 'dukkanlar'), shopData);
                     window.currentEditingShopDocId = docRef.id;
+                }
+
+                if (docId && shopPolygons[docId]) {
+                    shopPolygons[docId].polygon = shopPolygon;
+                    shopPolygons[docId].label = label;
                 }
                 
                 // Label güncelle
@@ -1328,15 +1897,53 @@
         const toggleBlockListBtn = document.getElementById('toggleBlockListBtn');
         const blockList = document.getElementById('blockList');
         let blockData = {};
-        
-        toggleBlockListBtn.addEventListener('click', () => {
-            if (blockListPanel.style.display === 'none' || !blockListPanel.style.display) {
-                blockListPanel.style.display = 'block';
+
+        if (toggleBlockListBtn) {
+            toggleBlockListBtn.addEventListener('click', () => {
+                const programEl = document.getElementById('programSettingsSection');
+                const homeEl = document.getElementById('settingsHome');
+                if (programEl) programEl.style.display = 'none';
+
+                if (homeEl) homeEl.style.display = 'none';
+
+                if (blockListPanel) blockListPanel.style.display = 'block';
                 updateBlockList();
-            } else {
-                blockListPanel.style.display = 'none';
-            }
-        });
+
+                if (blockListPanel && typeof blockListPanel.scrollIntoView === 'function') {
+                    blockListPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+
+        const settingsBackToMenuBtn = document.getElementById('settingsBackToMenuBtn');
+        if (settingsBackToMenuBtn) {
+            settingsBackToMenuBtn.addEventListener('click', () => {
+                const homeEl = document.getElementById('settingsHome');
+                const programEl = document.getElementById('programSettingsSection');
+                const blockEl = document.getElementById('blockListPanel');
+                if (programEl) programEl.style.display = 'none';
+                if (blockEl) blockEl.style.display = 'none';
+                if (homeEl) homeEl.style.display = 'block';
+                if (homeEl && typeof homeEl.scrollIntoView === 'function') {
+                    homeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
+
+        const settingsBackToMenuBtn2 = document.getElementById('settingsBackToMenuBtn2');
+        if (settingsBackToMenuBtn2) {
+            settingsBackToMenuBtn2.addEventListener('click', () => {
+                const homeEl = document.getElementById('settingsHome');
+                const programEl = document.getElementById('programSettingsSection');
+                const blockEl = document.getElementById('blockListPanel');
+                if (programEl) programEl.style.display = 'none';
+                if (blockEl) blockEl.style.display = 'none';
+                if (homeEl) homeEl.style.display = 'block';
+                if (homeEl && typeof homeEl.scrollIntoView === 'function') {
+                    homeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        }
         
         // Blok listesini güncelle
         async function updateBlockList() {
@@ -1638,6 +2245,50 @@
         .btn-success:hover {
             background: rgba(16, 185, 129, 0.3);
         }
+
+        .btn-secondary {
+            background: rgba(59, 130, 246, 0.14);
+            color: rgba(226, 232, 240, 0.92);
+            border: 1px solid rgba(59, 130, 246, 0.28);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(59, 130, 246, 0.22);
+            border-color: rgba(59, 130, 246, 0.38);
+        }
+
+        .btn-back {
+            padding: 10px 14px;
+        }
+
+        .stats-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            overflow-x: visible;
+            padding-bottom: 6px;
+        }
+
+        .stat-card {
+            flex: 1 1 160px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .stat-card .t {
+            font-size: 12px;
+            color: rgba(226, 232, 240, 0.72);
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .stat-card .v {
+            font-size: 22px;
+            color: rgba(226, 232, 240, 0.98);
+            font-weight: 900;
+        }
         
         /* Toast Mesaj Stilleri */
         .toast {
@@ -1683,19 +2334,21 @@
         
         /* Blok Listesi Panel */
         .block-list-panel {
-            position: fixed;
-            top: 84px;
-            right: 20px;
-            width: 320px;
-            max-height: calc(50vh - 100px);
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            z-index: 2000;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            overflow-y: auto;
+            position: relative;
+            top: auto;
+            right: auto;
+            width: 100%;
+            max-height: none;
+            overflow-y: visible;
+            padding: 0;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            z-index: auto;
+        }
+        
+        .block-list-panel::-webkit-scrollbar {
+            width: 6px;
         }
         
         .block-item {
@@ -1809,20 +2462,47 @@
                 display: none !important;
             }
 
-            body.admin-tab-list .table-container {
+            body.admin-tab-map #settingsPanel {
+                display: none !important;
+            }
+
+            body.admin-tab-list #shopTableContainer {
                 display: block !important;
             }
 
-            body.admin-tab-map #map {
+            body.admin-tab-list #settingsPanel {
+                display: none !important;
+            }
+
+            body.admin-tab-settings #map {
+                display: none !important;
+            }
+
+            body.admin-tab-settings #shopTableContainer {
+                display: none !important;
+            }
+
+            body.admin-tab-settings #settingsPanel {
                 display: block !important;
             }
-        }
+            
+            .shop-polygon.atlas {
+                fill: #10b981;
+                color: #10b981;
+            }
 
-        .leaflet-control-zoom a {
-            width: 44px;
-            height: 44px;
-            line-height: 44px;
-            font-size: 20px;
+            .shop-polygon.kullanilmiyor {
+                fill: #fbbf24;
+                color: #fbbf24;
+            }
+
+            .leaflet-touch .leaflet-control-zoom a {
+                width: 44px;
+                height: 44px;
+                line-height: 44px;
+                font-size: 20px;
+            }
+
         }
 
         .leaflet-touch .leaflet-control-zoom a {
@@ -1908,15 +2588,10 @@
             fill: #10b981;
             color: #10b981;
         }
-        
-        .shop-polygon.diger {
-            fill: #ef4444;
-            color: #ef4444;
-        }
-        
-        .shop-polygon.empty {
-            fill: #6b7280;
-            color: #6b7280;
+
+        .shop-polygon.kullanilmiyor {
+            fill: #fbbf24;
+            color: #fbbf24;
         }
 
         .login-screen {
@@ -1962,9 +2637,61 @@
             font-weight: 700;
             min-height: 18px;
         }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(10px);
+        }
+
+        .loading-card {
+            padding: 18px 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            width: min(92vw, 360px);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            border: 4px solid rgba(255, 255, 255, 0.18);
+            border-top-color: rgba(59, 130, 246, 0.95);
+            margin: 4px auto 12px;
+            animation: spin 0.9s linear infinite;
+        }
+
+        .loading-title {
+            font-weight: 900;
+            color: rgba(226, 232, 240, 0.95);
+            margin-bottom: 4px;
+        }
+
+        .loading-subtitle {
+            font-size: 13px;
+            color: rgba(226, 232, 240, 0.7);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+    <div id="appLoading" class="loading-overlay">
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <div class="loading-title">Yükleniyor...</div>
+            <div class="loading-subtitle">Veriler hazırlanıyor</div>
+        </div>
+    </div>
     <div id="loginScreen" class="login-screen">
         <div class="login-card">
             <div class="login-title">Yönetim Girişi</div>
@@ -1991,7 +2718,7 @@
         </div>
         <div class="flex items-center gap-4">
             <button id="toggleAreaDivisionBtn" class="btn btn-success">Blok Oluştur</button>
-            <button id="addShopBtn" class="btn btn-primary">Dükkan Ekle</button>
+            <button id="desktopSettingsBtn" class="btn btn-secondary" type="button">Ayarlar</button>
             <button id="logoutBtn" class="btn btn-danger">Çıkış Yap</button>
             <a href="index.html" class="nav-link">Kullanıcı Paneli</a>
             <a href="admin.html" class="nav-link active">Yönetim Paneli</a>
@@ -2007,18 +2734,59 @@
             <div class="icon">📋</div>
             <div class="label">Liste</div>
         </button>
+        <button id="adminTabSettingsBtn" class="admin-nav-btn" type="button">
+            <div class="icon">⚙️</div>
+            <div class="label">Ayarlar</div>
+        </button>
         <button id="adminActionBlockBtn" class="admin-nav-btn" type="button">
             <div class="icon">🧱</div>
             <div class="label">Blok</div>
-        </button>
-        <button id="adminActionAddBtn" class="admin-nav-btn" type="button">
-            <div class="icon">➕</div>
-            <div class="label">Ekle</div>
         </button>
     </nav>
     
     <!-- Map -->
     <div id="map"></div>
+
+    <!-- Ayarlar Panel -->
+    <div id="settingsPanel" class="table-container" style="display:none;">
+        <div class="p-6">
+            <h2 class="text-2xl font-bold text-gray-200 mb-4">Ayarlar</h2>
+            <div id="settingsHome">
+                <div class="text-sm text-gray-400 mb-6">Program listesini ve renklerini buradan yönetebilirsin. <span class="text-gray-200 font-semibold">Atlas</span> sabittir.</div>
+
+                <div id="settingsMenuButtons" class="grid grid-cols-1 gap-3 mb-6">
+                    <button id="toggleBlockListBtn" class="btn btn-success w-full">Blokları Göster</button>
+                    <button id="goProgramSettingsBtn" type="button" class="btn btn-secondary w-full">Program Ayarları</button>
+                </div>
+            </div>
+
+            <div id="programSettingsSection" style="display:none;">
+                <div class="flex justify-start mb-4">
+                    <button id="settingsBackToMenuBtn" type="button" class="btn btn-secondary btn-back">← Geri</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <input id="newProgramLabel" type="text" class="form-input" placeholder="Program Adı (örn: Sebze)" />
+                    <input id="newProgramValue" type="text" class="form-input" placeholder="Program Kodu (örn: sebze)" />
+                    <div class="flex items-center gap-3">
+                        <input id="newProgramColor" type="color" class="h-10 w-14 bg-transparent" value="#ef4444" />
+                        <button id="addProgramBtn" type="button" class="btn btn-primary flex-1">Program Ekle</button>
+                    </div>
+                </div>
+
+                <div id="programList" class="space-y-2"></div>
+            </div>
+
+            <div id="blockListPanel" class="block-list-panel" style="display: none;">
+                <div class="flex justify-start mb-4">
+                    <button id="settingsBackToMenuBtn2" type="button" class="btn btn-secondary btn-back">← Geri</button>
+                </div>
+                <h3 class="text-xl font-bold mb-4 text-gray-200">Son Eklenen Bloklar</h3>
+                <div id="blockList" class="space-y-2">
+                    <!-- Blok listesi buraya eklenecek -->
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Alan Bölme Panel -->
     <div id="areaDivisionPanel" class="area-division-panel" style="display: none;">
@@ -2110,10 +2878,11 @@
                 class="form-input" 
                 placeholder="Dükkan No (örn: Blok1-4)" 
             />
-            <select id="detailShopProgram" class="form-select">
-                <option value="diger">Diğer</option>
-                <option value="atlas">Atlas</option>
-            </select>
+            <select id="detailShopProgram" class="form-select"></select>
+            <label class="flex items-center gap-3 text-sm text-gray-200" style="margin-top: 6px; margin-bottom: 6px;">
+                <input id="detailShopKullanilmiyor" type="checkbox" class="h-4 w-4" />
+                <span>Kullanılmıyor</span>
+            </label>
             <input 
                 type="text" 
                 id="detailShopVergiNo" 
@@ -2152,11 +2921,11 @@
                 placeholder="Dükkan No (örn: A-101)" 
                 required
             />
-            <select id="shopProgram" class="form-select" required>
-                <option value="">Program Seçin</option>
-                <option value="atlas">Atlas</option>
-                <option value="diger">Diğer</option>
-            </select>
+            <select id="shopProgram" class="form-select"></select>
+            <label class="flex items-center gap-3 text-sm text-gray-200" style="margin-top: 6px; margin-bottom: 6px;">
+                <input id="shopKullanilmiyor" type="checkbox" class="h-4 w-4" />
+                <span>Kullanılmıyor</span>
+            </label>
             <input 
                 type="text" 
                 id="shopVergiNo" 
@@ -2176,29 +2945,26 @@
         </form>
     </div>
     
-    <!-- Blok Listesi Panel -->
-    <div id="blockListPanel" class="block-list-panel" style="display: none;">
-        <h3 class="text-xl font-bold mb-4 text-gray-200">Son Eklenen Bloklar</h3>
-        <div id="blockList" class="space-y-2">
-            <!-- Blok listesi buraya eklenecek -->
-        </div>
-    </div>
-    
     <!-- Table Container -->
-    <div class="table-container">
+    <div class="table-container" id="shopTableContainer">
         <div class="p-6">
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-gray-200">Dükkan Listesi</h2>
-                <button id="toggleBlockListBtn" class="btn btn-success">Blokları Göster</button>
+                <h2 class="text-2xl font-bold text-gray-200">İstatistikler</h2>
+            </div>
+
+            <div class="mb-6">
+                <div class="stats-cards" id="adminStatsContainer"></div>
             </div>
             <div class="overflow-x-auto">
+                <h2 class="text-2xl font-bold text-gray-200">Dükkan Listesi</h2>
                 <table class="w-full">
                     <thead>
                         <tr class="border-b border-gray-700">
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">İşlem</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan Adı</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Dükkan No</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Program</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">İşlem</th>
+                            <th class="px-6 py-3 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Sil</th>
                         </tr>
                     </thead>
                     <tbody id="shopTableBody">
