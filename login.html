@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atlas Hal | Giriş</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="page page-login">
+    <main class="auth-card">
+      <h1>Atlas Hal</h1>
+      <form id="loginForm" novalidate>
+        <div class="form-group">
+          <label for="username">Kullanıcı Adı</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            placeholder="Kullanıcı adınızı girin"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="password">Şifre</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Şifrenizi girin"
+            required
+          />
+        </div>
+        <button class="button-primary" type="submit">Giriş Yap</button>
+        <div class="form-status" id="loginStatus" role="status" aria-live="polite"></div>
+      </form>
+    </main>
+    <script type="module" src="assets/js/login.js"></script>
+  </body>
+</html>

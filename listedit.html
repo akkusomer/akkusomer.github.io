@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Atlas Hal | Düzenle</title>
+
+  <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="assets/css/listedit.css">
+  <script type="module" src="assets/js/listedit.js"></script>
+</head>
+
+<body class="page page-edit">
+  <div class="bg"></div>
+
+  <main class="auth-card glass">
+    <h1>Dükkan Düzenle</h1>
+
+    <form id="editForm" novalidate>
+      <label for="name">İsim</label>
+      <input id="name" autocomplete="off" required>
+
+      <div class="row">
+        <div>
+          <label for="no">No</label>
+          <input id="no" autocomplete="off">
+        </div>
+        <div>
+          <label for="program">Program</label>
+          <select id="program"></select>
+        </div>
+      </div>
+
+      <label for="telefon">Telefon</label>
+      <input id="telefon" autocomplete="off" placeholder="05xx...">
+
+      <label for="vergiNo">Vergi No</label>
+      <input id="vergiNo" autocomplete="off">
+
+      <label class="check">
+        <input type="checkbox" id="kullanilmiyor">
+        Kullanılmıyor
+      </label>
+
+      <div class="actions">
+        <button class="btn danger" id="btnCancel" type="button">İptal</button>
+        <button class="btn success" type="submit">Kaydet</button>
+      </div>
+
+      <div class="hint" id="hint"></div>
+    </form>
+  </main>
+</body>
+</html>

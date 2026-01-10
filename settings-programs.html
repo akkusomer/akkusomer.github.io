@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Atlas Hal | Programlar</title>
+
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/settings-programs.css" />
+  <script type="module" src="assets/js/settings-programs.js"></script>
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <main class="wrap">
+    <header class="topbar">
+      <button class="back" id="btnBack" type="button" aria-label="Geri">←</button>
+      <div class="brand center">Programlar</div>
+
+    </header>
+
+    <section class="panel glass">
+      <div class="panel-title">Program Ekle</div>
+
+      <div class="row">
+        <div>
+          <label>Ad (Label)</label>
+          <input id="inLabel" placeholder="Örn: Ofis" autocomplete="off" />
+        </div>
+        <div>
+          <label>Value</label>
+          <input id="inValue" placeholder="Örn: Ofis" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Renk</label>
+          <input id="inColor" type="color" value="#1100ff" />
+        </div>
+        <div class="row-actions">
+          <button class="btn success" id="btnAdd">Ekle</button>
+        </div>
+      </div>
+
+      <div class="hint" id="hint"></div>
+    </section>
+
+    <section class="list" id="progList" aria-label="Program listesi"></section>
+  </main>
+</body>
+</html>

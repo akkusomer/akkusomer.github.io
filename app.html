@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Atlas Hal | Ana Ekran</title>
+
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script type="module" src="assets/js/home.js"></script>
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand">Atlas Hal</div>
+      <button class="pill" id="btnLogout" type="button">Çıkış</button>
+    </header>
+
+    <section class="panel glass" aria-label="Genel Durum">
+      <h1 class="panel-title">Genel Durum</h1>
+
+      <div class="stats">
+        <div class="col">
+          <div class="row">
+            <span class="label">Toplam</span>
+            <span class="value" id="stTotal">144</span>
+          </div>
+          <div class="row">
+            <span class="label">Atlas</span>
+            <span class="value" id="stAtlas">45</span>
+          </div>
+          <div class="row">
+            <span class="label">Kullanmıyor</span>
+            <span class="value" id="stInactive">4</span>
+          </div>
+          <div class="row">
+            <span class="label">Oran</span>
+            <span class="value" id="stRate">%31</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="col">
+          <div class="row">
+            <span class="label">Eksikler</span>
+            <span class="value" id="stMissing">13</span>
+          </div>
+          <div class="row">
+            <span class="label">Telefon yok</span>
+            <span class="value" id="stNoPhone">8</span>
+          </div>
+          <div class="row">
+            <span class="label">Vergi no yok</span>
+            <span class="value" id="stNoTax">5</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="search glass" aria-label="Arama">
+      <input id="q" type="search" placeholder="Dükkan / No / Telefon ara..." autocomplete="off" />
+      <button class="search-btn" id="btnSearch" type="button" aria-label="Ara">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </section>
+
+    <section class="actions" aria-label="Ana Menü">
+      <button class="action" data-route="map" type="button">
+        <span class="icon c1" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M9 3v15M15 6v15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="text">Harita</span>
+      </button>
+
+      <button class="action" data-route="list" type="button">
+        <span class="icon c2" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M8 6h13M8 12h13M8 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="text">Liste</span>
+      </button>
+
+      <button class="action" data-route="outside" type="button">
+        <span class="icon c3" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 10.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </span>
+        <span class="text">Hal Dışı</span>
+      </button>
+
+      <button class="action" data-route="outside-add" type="button">
+        <span class="icon c4" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="text">Hal Dışı Ekle</span>
+      </button>
+
+      <button class="action" data-route="reports" type="button">
+        <span class="icon c5" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 20V4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M7 20V12M12 20V8M17 20V14M22 20H4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="text">Raporlar</span>
+      </button>
+
+      <button class="action" data-route="settings" type="button">
+        <span class="icon c6" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 7a2 2 0 1 1 4 0 2 2 0 0 1-4 0ZM6 17a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </span>
+        <span class="text">Ayarlar</span>
+      </button>
+    </section>
+
+    <footer class="hint">
+      <span id="statusText">Hazır.</span>
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Atlas Hal | Harita</title>
+
+  <link rel="stylesheet" href="assets/css/map.css" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script type="module" src="assets/js/map.js"></script>
+</head>
+
+<body class="map-app">
+  <div id="map"></div>
+
+  <!-- Topbar -->
+  <header class="map-topbar">
+    <button id="openListBtn" class="iconbtn" type="button" title="Liste">☰</button>
+
+    <!-- Brand: ana menü -->
+    <a class="brand" href="app.html" id="brandHome" title="Ana Menü">Atlas Hal</a>
+
+    <div class="search" id="searchWrap">
+      <button id="searchToggleBtn" class="iconbtn ghost" type="button" title="Ara">🔍</button>
+
+      <div class="searchbox closed" id="searchBox" aria-hidden="true">
+        <input id="q" type="text" placeholder="İsim / No / Vergi / Telefon ara..." />
+        <!-- Clear: sadece yazı varken -->
+        <button id="clearBtn" class="clearbtn" type="button" title="Temizle" aria-label="Temizle">×</button>
+        <!-- Close: her zaman -->
+        <button id="closeSearchBtn" class="closebtn" type="button" title="Kapat" aria-label="Kapat">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter bar (haritanın üstünde) -->
+  <div class="filterbar" id="filterBar">
+    <div class="filterrow" id="filterRow"></div>
+    <div class="filtermeta">
+      <span id="filterCount">0</span> kayıt
+    </div>
+  </div>
+
+  <!-- Drawer overlay -->
+  <div id="drawerOverlay" class="drawer-overlay" aria-hidden="true"></div>
+
+  <!-- Drawer SOLDAN -->
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <div class="t">Dükkanlar</div>
+        <div class="m"><span id="count">0</span> kayıt</div>
+      </div>
+      <button id="closeListBtn" class="iconbtn" type="button" title="Kapat">✕</button>
+    </div>
+
+    <div id="list" class="drawer-list"></div>
+  </aside>
+  <!-- BLOK (sadece ?admin=1) -->
+  <div id="blockFab" class="block-fab">
+    <button id="blockOpenBtn" type="button">🧱 Blok</button>
+  </div>
+
+  <div id="blockPanel" class="block-panel" aria-hidden="true">
+    <div class="h">
+      <div class="t">Blok Oluştur</div>
+      <button id="blockCloseBtn" class="x" type="button">✕</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Başlangıç No</label>
+        <input id="blockStartNo" type="number" placeholder="örn 40" min="1" />
+      </div>
+      <div>
+        <label>Bitiş No</label>
+        <input id="blockEndNo" type="number" placeholder="örn 80" min="1" />
+      </div>
+    </div>
+
+    <label>Bölme Yönü</label>
+    <div class="radios">
+      <label><input type="radio" name="blockDir" value="yatay" checked /> Yatay</label>
+      <label><input type="radio" name="blockDir" value="dikey" /> Dikey</label>
+    </div>
+
+    <label>Numara Başlangıç Köşesi</label>
+    <div class="radios">
+      <label><input type="radio" name="blockCorner" value="topLeft" /> Sol Üst</label>
+      <label><input type="radio" name="blockCorner" value="topRight" checked /> Sağ Üst</label>
+    </div>
+
+    <div class="muted">Seçilen: <span id="blockPts">0/4</span></div>
+
+    <div class="btnrow">
+      <button id="blockStartBtn" class="btn primary" type="button">Seçimi Başlat</button>
+      <button id="blockClearBtn" class="btn danger" type="button">Temizle</button>
+    </div>
+
+    <button id="blockCreateBtn" class="btn primary" type="button" style="width:100%; margin-top:10px;" disabled>
+      Oluştur & Kaydet
+    </button>
+
+    <div id="blockStatus" class="muted"></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+</body>
+</html>
